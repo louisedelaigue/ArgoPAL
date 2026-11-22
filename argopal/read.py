@@ -210,7 +210,7 @@ def read_pal(fname_or_ds, meta=None):
     spectrum = np.asarray(ds[SPECTRUM_VAR].values, dtype=float)
     n_values = spectrum.shape[1]
     # The values dimension is named after its size (N_VALUES23); a mismatch
-    # means the file is not laid out the way argopal expects.
+    # means the file is not laid out the way ArgoPAL expects.
     values_dim = ds[SPECTRUM_VAR].dims[1]
     suffix = values_dim.removeprefix("N_VALUES")
     if suffix.isdigit() and int(suffix) != n_values:

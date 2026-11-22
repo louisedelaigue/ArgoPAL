@@ -1,6 +1,6 @@
 """Reference winds: collocate buoy winds with PAL measurements.
 
-argopal does not download reference winds.  The reference is one table
+ArgoPAL does not download reference winds.  The reference is one table
 (DataFrame or CSV file) of measured wind speed at known times and
 positions, from one or several references (buoys, ships, stations).
 Columns, recognised by name (case-insensitive):

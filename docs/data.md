@@ -12,7 +12,7 @@ GDAC **auxiliary** folder, not the core one:
 | `aux/<dac>/<wmo>/<wmo>_meta_aux.nc` | Hydrophone model and serial number, `CONFIG_Pal*` sampling and processing parameters |
 | `aux/<dac>/<wmo>/<wmo>_tech_aux.nc` | Technical parameters |
 
-The band centre frequencies are not stored in the files, so argopal
+The band centre frequencies are not stored in the files, so ArgoPAL
 assigns them from the number of values per spectrum. The PAL sends one of
 two layouts:
 

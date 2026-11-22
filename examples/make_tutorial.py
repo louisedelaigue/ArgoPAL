@@ -23,7 +23,7 @@ def code(text):
 md("""
 # ArgoPAL tutorial
 
-**argopal** turns the passive acoustic (PAL) measurements of BGC-Argo floats
+**ArgoPAL** turns the passive acoustic (PAL) measurements of BGC-Argo floats
 into surface wind speed, starting from a float's WMO number and using only
 data from the Argo GDAC.
 
@@ -53,7 +53,7 @@ import warnings
 
 import argopal as ap
 
-warnings.simplefilter("ignore")  # argopal warnings are discussed in the text
+warnings.simplefilter("ignore")  # ArgoPAL warnings are discussed in the text
 ap.hello()
 """)
 
@@ -229,7 +229,7 @@ Published coefficients are not tuned to floats.  With a reference wind, the
 models are refitted (nonlinear least squares, measurements within 40 km of
 a reference), and each refitted wind gets an uncertainty.
 
-argopal does not download reference winds: one table holds them all, here
+ArgoPAL does not download reference winds: one table holds them all, here
 three Météo-France buoys (DYFAMED, LION, PACA), January–June 2026.  Columns
 `reference_name`, `datetime`, `latitude`, `longitude`, `wind_speed`, and
 optionally `wind_speed_sigma`, the error of each value.
@@ -306,7 +306,7 @@ cal["wind_uncertainty"].round(2)
 """)
 
 md("""
-Ten cycles pass within 40 km of a buoy, the minimum argopal asks for the
+Ten cycles pass within 40 km of a buoy, the minimum ArgoPAL asks for the
 bootstrap; with fewer, it warns that the coefficient term is unreliable.
 The refit should still not be trusted far outside the winds seen near the
 buoys.

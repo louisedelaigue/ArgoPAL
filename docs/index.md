@@ -8,6 +8,14 @@
 
 **Wind from passive acoustics on BGC-Argo floats.**
 
+```{note}
+ArgoPAL is under active development.  Functions, options and results may
+change between versions, and the processing has so far been tested on two
+floats only.  Check the [status and limitations](limitations.md) before
+relying on its output, and report problems on the
+[issue tracker](https://github.com/louisedelaigue/ArgoPAL/issues).
+```
+
 ArgoPAL starts from a float's WMO number, downloads its passive acoustic
 (PAL) spectra and its CTD/BGC data from the Argo GDAC, and processes them
 into surface wind speed: cleaning and despiking, depth correction from the

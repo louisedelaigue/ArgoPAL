@@ -1,4 +1,4 @@
-"""Write argopal results to CSV or NetCDF."""
+"""Write ArgoPAL results to CSV or NetCDF."""
 
 import json
 import os
@@ -50,9 +50,9 @@ def _tables(obj):
 
 
 def export(obj, path, format="csv"):
-    """Write argopal tables to CSV or NetCDF, at any stage of processing.
+    """Write ArgoPAL tables to CSV or NetCDF, at any stage of processing.
 
-    Works on the output of any argopal step: a single table (e.g. from
+    Works on the output of any ArgoPAL step: a single table (e.g. from
     `read_pal`, `clean_pal`, `read_profiles`, `depth_correct`) or a dict of
     tables (e.g. from `process_float`; entries that are not tables, such as
     "meta", are skipped).
@@ -96,7 +96,7 @@ def export(obj, path, format="csv"):
 
     first = next(iter(tables.values()))
     root_attrs = {
-        "title": "argopal: BGC-Argo float data with PAL acoustics",
+        "title": "ArgoPAL: BGC-Argo float data with PAL acoustics",
         "argopal_version": __version__,
         "wmo": _attr(first.attrs.get("wmo", "")),
         "tables": ",".join(tables) if not single else "",

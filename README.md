@@ -8,6 +8,14 @@
 
 Wind from passive acoustics on BGC-Argo floats.
 
+> [!NOTE]
+> ArgoPAL is under active development.  Functions, options and results
+> may change between versions, and the processing has so far been tested
+> on two floats only.  Check the
+> [status and limitations](#status-and-limitations) before relying on its
+> output, and report problems on the
+> [issue tracker](https://github.com/louisedelaigue/ArgoPAL/issues).
+
 Documentation: https://argopal.readthedocs.io
 
 ArgoPAL starts from a float's WMO number, downloads its passive acoustic
@@ -50,7 +58,7 @@ listed in [`docs/versions.md`](docs/versions.md).
 - **Calibration needs a reference.**  The published wind models were not
   made for floats and are biased on them (e.g. +1 to +2 m s⁻¹ for Nystuen on
   7902280).  Refitting needs reference winds (buoys) that the float
-  passes close to; argopal does not download them.  With fewer than 10
+  passes close to; ArgoPAL does not download them.  With fewer than 10
   cycles near a reference, the coefficient uncertainty is unreliable, and
   a refit is not to be trusted far outside the winds seen near the
   reference.
@@ -208,7 +216,7 @@ and `ais_window` change the criteria.  Figure: `ap.plot_ais(result["park"])`.
 **What AIS data is needed.** Vessel positions covering the float's area
 and dates, as any of:
 
-| format | what argopal needs |
+| format | what ArgoPAL needs |
 |---|---|
 | pandas DataFrame | columns `datetime` (UTC), `mmsi`, `latitude`, `longitude` |
 | CSV of decoded positions (`.csv`, `.csv.gz`) | a time column (`datetime`, `time`, `BaseDateTime`, `# Timestamp`, `tagblock_timestamp` = UNIX s, …), `mmsi`, latitude (`latitude`/`lat`/`y`), longitude (`longitude`/`lon`/`x`). Covers NOAA MarineCadastre, Danish Maritime Authority and the decoded files of the 2025 DYFAMED study. |
@@ -238,7 +246,7 @@ also be called on its own, e.g. `ap.wind_nystuen2015(park["spl_8000Hz"])`.
 
 ## Reference wind, refitting and uncertainty
 
-argopal does not download reference winds: a table of buoy winds at hand
+ArgoPAL does not download reference winds: a table of buoy winds at hand
 is collocated with each PAL measurement, then the models are refitted to
 it, as in Delaigue et al. (2026, Sect. 2.6).  One CSV can hold every
 reference:

@@ -245,7 +245,7 @@ def read_ais_nmea(path, bbox=None):
     if no_time and not rows:
         raise ValueError(
             f"{os.path.basename(path)}: no tag-block receiver times (c:) "
-            "found; argopal needs them to time AIS positions."
+            "found; ArgoPAL needs them to time AIS positions."
         )
     if not rows:
         return _empty()

@@ -2,7 +2,7 @@
 
 A second float for the tests, alongside 7902280. It is **not on the Argo
 GDAC** (no WMO number), so these files are copied from the study's own data
-and are used only by the tests, never by argopal itself.
+and are used only by the tests, never by ArgoPAL itself.
 
 Float: PROVOR_V, serial P53360-23FR001, Iridium login `lovuse024c`,
 deployed near the DYFAMED buoy (Ligurian Sea) in February 2025 —

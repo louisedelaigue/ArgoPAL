@@ -1,4 +1,4 @@
-"""The argopal processing pipeline, from a WMO number."""
+"""The ArgoPAL processing pipeline, from a WMO number."""
 
 from .ais import flag_ships, read_ais, track_bbox
 from .argo import DEFAULT_MODE, read_park, read_profiles
@@ -153,7 +153,7 @@ def process_float(
         with a value within `reference_max_time`.  A single source is named
         "ref"; a dict, name -> source, names it (e.g. {"buoys":
         "reference_winds.csv"}) or collocates several sources separately.
-        argopal does not download reference winds.
+        ArgoPAL does not download reference winds.
     reference_max_time : str, optional
         Largest time difference for collocation, by default "1h".
     fit_reference : str, optional

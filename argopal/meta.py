@@ -8,13 +8,13 @@ __author__ = "Delaigue, Louise"
 def hello():
     greeting = textwrap.dedent(
         rf"""
-        a  Wind from passive acoustics
+        A  Wind from passive acoustics
         r  on BGC-Argo floats
         g
         o  Version {__version__}
-        p
-        a
-        l
+        P
+        A
+        L
         """
     )
     print(greeting)

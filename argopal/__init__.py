@@ -1,5 +1,5 @@
 """
-argopal
+ArgoPAL
 =======
 
 Retrieve wind speed from passive acoustic (PAL) measurements on BGC-Argo
