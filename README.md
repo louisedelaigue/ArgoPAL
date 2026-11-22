@@ -1,10 +1,10 @@
-# argopal
+# ArgoPAL
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 Wind from passive acoustics on BGC-Argo floats.
 
-argopal starts from a float's WMO number, downloads its passive acoustic
+ArgoPAL starts from a float's WMO number, downloads its passive acoustic
 (PAL) spectra from the Argo GDAC, and will process them into surface wind
 speed.
 
