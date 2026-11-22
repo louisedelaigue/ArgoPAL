@@ -34,6 +34,17 @@ before sending it. `spectral_level` reads it and subtracts the bandwidth
 term only from floats that did not normalise, so the correction is never
 applied twice; `band_normalization=` overrides it.
 
+## Which floats have a PAL
+
+```{include} ../README.md
+---
+start-after: "## Find the floats with acoustics"
+end-before: "## Get the acoustic data of a float"
+relative-docs: "docs/"
+relative-images: true
+---
+```
+
 ## Download and read
 
 ```{include} ../README.md

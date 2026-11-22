@@ -203,3 +203,12 @@ def test_order_check_skips_too_few_rows():
     with warnings.catch_warnings():
         warnings.simplefilter("error", argopal.BandOrderWarning)
         argopal.check_band_order(pal)
+
+
+def test_select_all_bands_with_data():
+    pal = argopal.read_pal(TRAJ)
+    out = argopal.select_bands(pal, bands="all")
+    assert out.attrs["bands_hz"] == argopal.available_bands(pal)
+    assert out.attrs["bands_dropped"] == []
+    with pytest.raises(ValueError, match='"all"'):
+        argopal.select_bands(pal, bands="everything")

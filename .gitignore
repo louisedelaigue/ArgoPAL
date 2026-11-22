@@ -146,7 +146,7 @@ examples/output/
 
 # Documentation build
 docs/_build/
-docs/tutorial.ipynb
+docs/tutorials/
 
 # Coverage
 .coverage

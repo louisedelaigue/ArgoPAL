@@ -19,11 +19,13 @@ Run every step from a WMO number.
 
 ## Argo GDAC
 
-Find, list and download a float's files from the Argo GDAC.
+Find the floats with PAL data, and find, list and download a float's files from the Argo GDAC.
 
 ```{eval-rst}
 .. currentmodule:: argopal
 
+.. autofunction:: find_pal_floats
+.. autofunction:: read_profile_index
 .. autofunction:: fetch_pal
 .. autofunction:: find_dac
 .. autofunction:: list_files

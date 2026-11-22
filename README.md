@@ -39,15 +39,30 @@ From a local copy, for development:
 import argopal
 ```
 
-## Tutorial
+## Tutorials
 
-[`examples/argopal_tutorial.ipynb`](examples/argopal_tutorial.ipynb) walks
-through every step on float 7902280: processing, options, the pipeline
-function by function, figures, published wind models, calibration against
-three Météo-France buoys with uncertainty, AIS and export.  It downloads
-the float from the GDAC; the buoy winds it uses are in `examples/data/`.
-Rebuild it with `python examples/make_tutorial.py`, then run it from
-`examples/`.
+Four notebooks in `examples/`:
+
+- [**From PAL data to wind speed**](examples/argopal_tutorial.ipynb): the
+  full pipeline on float 7902280: processing, options, every step function by function,
+  figures, published wind models, calibration against three Météo-France
+  buoys with uncertainty, AIS and export.
+- [**Getting the PAL data**](examples/pal_data_tutorial.ipynb): the
+  acoustic data only, every band, in one park table with the float's
+  CTD/BGC data and position, and one profiles table; no depth correction,
+  wind or despiking (e.g. to look at ships or marine mammals).
+- [**Finding PAL floats and processing several**](examples/multi_float_tutorial.ipynb):
+  every float on the GDAC with PAL data (`find_pal_floats`), where and
+  when they measured, selection by region and period, processing several
+  floats in a loop, and comparing them.
+- [**Understanding the depth correction**](examples/depth_correction_tutorial.ipynb):
+  what β is, how it changes with depth, frequency and season, per-profile
+  versus mean β, delayed versus raw profiles, and its effect on wind
+  speed.
+
+They download the floats from the GDAC; the buoy winds are in
+`examples/data/`.  Each is built by a script, `examples/make_*.py`; run it,
+then run the notebook from `examples/`.
 
 ## Status and limitations
 
@@ -74,9 +89,26 @@ listed in [`docs/versions.md`](docs/versions.md).
   is reduced by despiking only.
 - **Rain is not flagged.**  Rain raises the 8 kHz level and the wind
   estimate with it.
-- **Tested floats.**  Tested on two NKE PROVOR floats with PAL
-  hydrophones in the Ligurian Sea; floats elsewhere or with other
-  configurations may need adjustments.
+- **Flat, loud spectra are not flagged.**  Some cycles hold spectra that
+  are loud and flat across frequency (e.g. cycle 17 of 2904023), which is
+  not wind noise; they give unrealistic winds (tens of m s⁻¹).
+  Despiking removes short events, not whole cycles.
+- **Tested floats.**  Tested on the four floats with PAL data on the GDAC
+  (2904023, 2904024 and 7902280 in the Mediterranean, 7902388 in the
+  eastern tropical Pacific; all NKE PROVOR with HTI hydrophones) and on
+  the 2025 sea-trial float; other configurations may need adjustments.
+
+## Find the floats with acoustics
+
+No GDAC index records which floats carry a PAL, so `find_pal_floats`
+looks for the PAL spectra in every float folder of the GDAC's `aux/`
+directory (a couple of minutes; the list is saved in
+`argopal_data/pal_floats.csv` and reused for a week):
+
+```python
+floats = argopal.find_pal_floats()          # wmo, dac, dates, first/last positions
+index = argopal.read_profile_index(floats["wmo"])  # every profile: date, position
+```
 
 ## Get the acoustic data of a float
 

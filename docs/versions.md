@@ -11,6 +11,19 @@
   share one reference value as independent.
 - `collocate_reference` adds `<name>_time`, the time of the reference
   value used.
+- `select_bands(pal, bands="all")` keeps every band that holds data.
+- Variable names from the core files are plain strings.
+- `find_pal_floats`: every float on the GDAC with PAL data (found by
+  reading the start of each `Rtraj_aux` file; saved and reused for a
+  week), with where and when it measured; `read_profile_index`: the
+  GDAC's synthetic-profile index.
+- Tested on the three other PAL floats on the GDAC (2904023, 2904024,
+  7902388), including full 23-band spectra.
+- Tutorials: "Finding PAL floats and processing several" and
+  "Understanding the depth correction".
+- Tutorials: a second, shorter notebook, "Getting the PAL data" (every
+  band in a park table with the CTD/BGC data, and a profiles table, with
+  no further processing); the first is now "From PAL data to wind speed".
 - Documentation: every function on one API page, grouped by processing
   step, and an Outputs page describing every table and column.
 

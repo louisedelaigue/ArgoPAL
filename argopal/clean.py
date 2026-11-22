@@ -53,8 +53,10 @@ def select_bands(pal, bands=DEFAULT_BANDS, min_coverage=0.5):
     ----------
     pal : pd.DataFrame
         Output of `read_pal` (all bands).
-    bands : float or sequence of float, optional
-        Band centre frequencies (Hz) to keep, by default (8000,).
+    bands : float, sequence of float or "all", optional
+        Band centre frequencies (Hz) to keep, by default (8000,).  "all"
+        keeps every band that holds data (e.g. the 9 bands of a float
+        sending 9-band spectra).
     min_coverage : float, optional
         A band must have a value in at least this fraction of spectra to be
         kept, by default 0.5.
@@ -78,6 +80,12 @@ def select_bands(pal, bands=DEFAULT_BANDS, min_coverage=0.5):
         For each requested band dropped for lack of data, e.g. 3.15 kHz on
         a float sending 9-band spectra.
     """
+    if isinstance(bands, str):
+        if bands != "all":
+            raise ValueError(
+                f'bands must be frequencies (Hz) or "all"; got {bands!r}.'
+            )
+        bands = available_bands(pal, min_coverage)
     if np.isscalar(bands):
         bands = [bands]
     known = list(pal.attrs["bands_hz"])

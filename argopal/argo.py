@@ -139,7 +139,7 @@ def profile_variables(fname_or_ds):
     """Parameters measured in the profiles of an Sprof file (incl. PRES)."""
     ds = _open(fname_or_ds)
     names, _ = _profile_parameters(ds)
-    found = [n for n in dict.fromkeys(names.ravel()) if n]
+    found = [str(n) for n in dict.fromkeys(names.ravel()) if n]
     return [v for v in found if v in ds]
 
 
@@ -220,7 +220,7 @@ def trajectory_variables(fname_or_ds):
     out = []
     for n in names:
         if n in ds and np.isfinite(np.asarray(ds[n].values, float)).any():
-            out.append(n)
+            out.append(str(n))
     return out
 
 

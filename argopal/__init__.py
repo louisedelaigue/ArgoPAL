@@ -171,6 +171,7 @@ from .plot import (
 from .positions import attach_positions, read_positions
 from .read import read_pal, read_pal_meta
 from .reference import collocate_reference, read_reference
+from .search import find_pal_floats, read_profile_index
 from .wind import (
     COEFFICIENTS,
     LITERATURE_MODELS,
@@ -217,6 +218,7 @@ __all__ = [
     "export",
     "fetch_pal",
     "find_dac",
+    "find_pal_floats",
     "fit_wind_models",
     "flag_ship_deviation",
     "flag_ships",
@@ -244,6 +246,7 @@ __all__ = [
     "read_pal_meta",
     "read_park",
     "read_positions",
+    "read_profile_index",
     "read_profiles",
     "read_reference",
     "save_figure",

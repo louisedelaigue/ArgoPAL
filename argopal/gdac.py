@@ -16,8 +16,10 @@ _RE_NC_LINK = re.compile(r'href="([^"?/]+\.nc)"')
 _TIMEOUT = 60
 
 
-def _request(url, method="GET"):
-    req = urllib.request.Request(url, headers=_HEADERS, method=method)
+def _request(url, method="GET", headers=None):
+    req = urllib.request.Request(
+        url, headers={**_HEADERS, **(headers or {})}, method=method
+    )
     return urllib.request.urlopen(req, timeout=_TIMEOUT)
 
 

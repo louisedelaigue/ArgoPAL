@@ -12,12 +12,20 @@ sys.path.insert(0, ROOT)
 import argopal
 
 
-# The tutorial lives in examples/; a copy is rendered with its saved
-# outputs (it downloads a float from the GDAC, so it is not re-run here).
-shutil.copyfile(
-    os.path.join(ROOT, "examples", "argopal_tutorial.ipynb"),
-    os.path.join(HERE, "tutorial.ipynb"),
-)
+# The tutorials live in examples/; copies are rendered with their saved
+# outputs (they download a float from the GDAC, so they are not re-run).
+TUTORIALS = [
+    "argopal_tutorial.ipynb",
+    "pal_data_tutorial.ipynb",
+    "multi_float_tutorial.ipynb",
+    "depth_correction_tutorial.ipynb",
+]
+os.makedirs(os.path.join(HERE, "tutorials"), exist_ok=True)
+for name in TUTORIALS:
+    shutil.copyfile(
+        os.path.join(ROOT, "examples", name),
+        os.path.join(HERE, "tutorials", name),
+    )
 
 project = "ArgoPAL"
 author = "Louise Delaigue"

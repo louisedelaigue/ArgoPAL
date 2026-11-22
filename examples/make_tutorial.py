@@ -21,14 +21,17 @@ def code(text):
 
 
 md("""
-# ArgoPAL tutorial
+# From PAL data to wind speed
 
 **ArgoPAL** turns the passive acoustic (PAL) measurements of BGC-Argo floats
 into surface wind speed, starting from a float's WMO number and using only
 data from the Argo GDAC.
 
-This notebook walks through its functionalities on float **7902280**
-(Ligurian Sea, 2026):
+This notebook goes through the full pipeline, from the acoustic spectra to
+depth-corrected and calibrated wind speed, on float **7902280** (Ligurian
+Sea, 2026).  To get only the acoustic data (every band, with the float's
+CTD/BGC data, no further processing), see
+[Getting the PAL data](pal_data_tutorial.ipynb).
 
 1. one-call processing
 2. what the float measured

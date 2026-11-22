@@ -25,6 +25,7 @@ push.  To build it locally:
     pip install -e ".[docs]"
     sphinx-build -b html docs docs/_build/html
 
-The tutorial page is a copy of `examples/argopal_tutorial.ipynb`, shown
-with its saved outputs.  After changing the tutorial, rebuild and re-run
-it (`python examples/make_tutorial.py`, then run it from `examples/`).
+The tutorial pages are copies of the notebooks in `examples/`, shown with
+their saved outputs.  Each notebook is built by a script,
+`examples/make_*.py`: after changing it, run the script, then run the
+notebook from `examples/` so that its outputs are saved.

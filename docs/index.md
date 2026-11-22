@@ -33,8 +33,17 @@ argopal.export(result, "wmo7902280.nc", format="netcdf")
 :caption: Getting started
 
 installation
-tutorial
 limitations
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Tutorials
+
+tutorials/argopal_tutorial
+tutorials/pal_data_tutorial
+tutorials/multi_float_tutorial
+tutorials/depth_correction_tutorial
 ```
 
 ```{toctree}
