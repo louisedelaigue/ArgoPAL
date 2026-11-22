@@ -73,6 +73,13 @@ def export(obj, path, format="csv"):
     -------
     list of str
         The files written.
+
+    Notes
+    -----
+    CSV files hold the table columns only; NetCDF also keeps each table's
+    `attrs` (the processing record) as group attributes, nested values as
+    JSON text.  The "Outputs" page of the documentation describes every
+    table and column.
     """
     if format not in ("csv", "netcdf"):
         raise ValueError(f"format must be 'csv' or 'netcdf'; got {format!r}.")

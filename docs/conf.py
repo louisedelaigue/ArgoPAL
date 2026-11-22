@@ -28,7 +28,6 @@ version = release
 extensions = [
     "myst_nb",
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx_copybutton",
@@ -44,7 +43,6 @@ suppress_warnings = ["myst.header"]
 
 # API reference from the NumPy-style docstrings; `name` renders as code
 default_role = "literal"
-autosummary_generate = True  # one page per function, in docs/api/generated
 autodoc_default_options = {"members": False}
 autodoc_typehints = "none"
 napoleon_google_docstring = False

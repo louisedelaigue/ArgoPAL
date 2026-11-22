@@ -202,6 +202,9 @@ def process_float(
           wind-dependent σ of each refitted model, by wind-speed bin;
         - "meta" : PAL sensor and configuration (`read_pal_meta`);
         - "files" : file name -> local path of everything downloaded.
+
+        Every table and column is described on the "Outputs" page of the
+        documentation (https://argopal.readthedocs.io).
     """
     if beta_method not in BETA_METHODS:
         raise ValueError(f"beta_method must be one of {BETA_METHODS}.")

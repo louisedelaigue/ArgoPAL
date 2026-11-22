@@ -43,6 +43,7 @@ limitations
 
 data
 processing
+outputs
 wind
 ais
 figures
@@ -52,7 +53,7 @@ figures
 :maxdepth: 2
 :caption: Reference
 
-api/index
+api
 versions
 development
 ```

@@ -120,6 +120,23 @@ result["beta"]          # β of every band at each depth, per profile
 result["positions"]     # launch + surface GPS fixes
 ```
 
+The main table is `result["park"]`, one row per acoustic measurement:
+
+| columns | content |
+|---|---|
+| `cycle`, `datetime`, `pressure` | when and where the float measured |
+| `f_<f>Hz` | band level as sent, after QC and despiking (dB re 1 µPa) |
+| `TEMP`, `PSAL`, `DOXY`, … with `_qc`, `_data_mode` | park CTD/BGC data at the time of the measurement |
+| `latitude`, `longitude`, `position_gap_h` | position between surface fixes |
+| `depth`, `beta_<f>Hz` | depth (m) and depth correction β (dB) |
+| `spl_<f>Hz` | depth-corrected spectral level (dB re 1 µPa² Hz⁻¹) |
+| `U_<model>` | wind speed from each published model (m s⁻¹) |
+| `U_<model>_fit`, `U_<model>_fit_sigma*` | with a reference: refitted wind and its uncertainty |
+| `ships_nearby`, `ship_flag` | with AIS: vessels nearby |
+
+Every table and column, with units, is described in
+[Outputs](https://argopal.readthedocs.io/en/latest/outputs.html).
+
 `process_float` runs these steps; each is also a function on its own:
 
 | step | function(s) | adds |
@@ -172,6 +189,10 @@ ap.export(result, "wmo7902280.nc", format="netcdf")   # one file, one group per 
 ap.export(ap.clean_pal(pal), "pal_clean.csv")         # a single intermediate table
 ap.read_export("wmo7902280.nc")                       # back to DataFrames
 ```
+
+CSV gives one file per table, without the processing record; NetCDF keeps
+everything in one file, one group per table, with each table's processing
+record as attributes.  See [Outputs](https://argopal.readthedocs.io/en/latest/outputs.html).
 
 ### Depth correction
 

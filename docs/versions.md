@@ -10,7 +10,8 @@
   measurements that share one reference value as independent.
 - `collocate_reference` adds `<name>_time`, the time of the reference
   value used.
-- Documentation: one page per function, grouped by processing step.
+- Documentation: every function on one API page, grouped by processing
+  step, and an Outputs page describing every table and column.
 
 ## 0.1.0b1 (2026-11-22)
 

@@ -152,4 +152,3 @@ docs/tutorial.ipynb
 .coverage
 coverage.xml
 htmlcov/
-docs/api/generated/
