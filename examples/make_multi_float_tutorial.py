@@ -36,6 +36,7 @@ they measure, and what wind did they see?  This notebook:
 code("""
 import warnings
 
+import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -65,20 +66,19 @@ floats
 md("""
 ## 2. Where they measured
 
-Every profile of these floats, from the same index:
+Every profile of these floats, from the same index.  `argopal.map_axes`
+makes a map in ArgoPAL's style (global here, since the floats are far
+apart; regional when they are close together):
 """)
 
 code("""
 index = argopal.read_profile_index(floats["wmo"])
 
-fig, ax = plt.subplots(figsize=(11, 4.5), layout="constrained")
+fig, ax = argopal.map_axes(index["longitude"], index["latitude"])
 for wmo, g in index.groupby("wmo"):
-    ax.plot(g["longitude"], g["latitude"], ".-", ms=3, lw=0.5, label=wmo)
-ax.set_xlabel("Longitude (°E)")
-ax.set_ylabel("Latitude (°N)")
-ax.set_aspect("equal")
-ax.grid(alpha=0.3)
-_ = ax.legend(title="WMO", fontsize=8)
+    ax.plot(g["longitude"], g["latitude"], "o", ms=3, label=wmo,
+            transform=ccrs.PlateCarree())
+_ = ax.legend(title="WMO", fontsize=8, loc="lower center")
 """)
 
 md("""
@@ -228,19 +228,19 @@ track = (
     .reset_index()
 )
 
-fig, ax = plt.subplots(figsize=(10, 5), layout="constrained")
+pc = ccrs.PlateCarree()
+fig, ax = argopal.map_axes(track["longitude"], track["latitude"],
+                           figsize=(10, 6))
 sc = ax.scatter(
     track["longitude"], track["latitude"], c=track["U_nystuen2015"],
-    cmap="viridis", s=14, vmin=0, vmax=15,
+    cmap="viridis", s=14, vmin=0, vmax=15, transform=pc, zorder=3,
 )
 for wmo, g in track.groupby("wmo"):
     ax.annotate(wmo, (g["longitude"].iloc[0], g["latitude"].iloc[0]),
-                fontsize=8, xytext=(4, 4), textcoords="offset points")
-fig.colorbar(sc, ax=ax, label="Wind speed (m s$^{-1}$), daily median")
-ax.set_xlabel("Longitude (°E)")
-ax.set_ylabel("Latitude (°N)")
-ax.set_aspect("equal")
-ax.grid(alpha=0.3)
+                xycoords=pc._as_mpl_transform(ax), fontsize=8,
+                xytext=(4, 4), textcoords="offset points")
+fig.colorbar(sc, ax=ax, shrink=0.7,
+             label="Wind speed (m s$^{-1}$), daily median")
 """)
 
 md("""

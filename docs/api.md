@@ -159,6 +159,7 @@ One figure per processing step; each returns `(fig, axes)`.
 .. autofunction:: plot_wind_fit
 .. autofunction:: plot_ais
 .. autofunction:: save_figure
+.. autofunction:: map_axes
 ```
 
 ## Export

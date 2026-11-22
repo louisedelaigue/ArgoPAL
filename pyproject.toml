@@ -26,6 +26,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Oceanography",
 ]
 dependencies = [
+    "cartopy",
     "gsw",
     "matplotlib",
     "netCDF4",

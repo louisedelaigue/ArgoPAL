@@ -19,6 +19,8 @@
   GDAC's synthetic-profile index.
 - Tested on the three other PAL floats on the GDAC (2904023, 2904024,
   7902388), including full 23-band spectra.
+- Maps use cartopy, with land and labelled gridlines (`map_axes`, used by
+  `plot_positions` and the tutorials); cartopy is now a dependency.
 - Tutorials: "Finding PAL floats and processing several" and
   "Understanding the depth correction".
 - Tutorials: a second, shorter notebook, "Getting the PAL data" (every

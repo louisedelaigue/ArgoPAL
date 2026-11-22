@@ -184,3 +184,22 @@ def test_panel_labels(result):
     fig, axes = argopal.plot_beta(result["beta"])
     assert [t.get_text() for ax in axes for t in ax.texts] == ["a)", "b)"]
     plt.close(fig)
+
+
+def test_map_axes_global_and_regional():
+    import cartopy.crs as ccrs
+
+    _, ax = argopal.map_axes()
+    assert isinstance(ax.projection, ccrs.Robinson)
+    # far apart: global
+    _, ax = argopal.map_axes([-150, 20], [8, 43])
+    assert isinstance(ax.projection, ccrs.Robinson)
+    # close together: regional, around the positions
+    _, ax = argopal.map_axes([5, 9], [41, 44])
+    assert isinstance(ax.projection, ccrs.PlateCarree)
+    x0, x1, y0, y1 = ax.get_extent(ccrs.PlateCarree())
+    assert x0 < 5 and x1 > 9 and y0 < 41 and y1 > 44
+    assert x1 - x0 < 8  # not the whole world
+    # forced
+    _, ax = argopal.map_axes([5, 9], [41, 44], global_map=True)
+    assert isinstance(ax.projection, ccrs.Robinson)

@@ -407,9 +407,106 @@ def plot_park(
 # --- Step 4: attach_positions ----------------------------------------------------
 
 
+_GRID_STEPS = (0.5, 1, 2, 5, 10, 20, 30, 60)
+
+
+def _lon_label(lon):
+    if np.isclose(lon, 0):
+        return "0°"
+    return f"{abs(lon):g}°W" if lon < 0 else f"{lon:g}°E"
+
+
+def map_axes(
+    longitude=None,
+    latitude=None,
+    ax=None,
+    global_map=None,
+    pad=0.15,
+    figsize=None,
+):
+    """Map axes in ArgoPAL's style: land from Natural Earth (1:50m, light
+    grey), dashed labelled gridlines (°W / °E, °N / °S).
+
+    A global map (Robinson projection, gridlines every 60° and 30°) when
+    the positions span more than 120° of longitude or 60° of latitude;
+    otherwise a regional map (plate carrée) around them, with gridlines
+    at a spacing that suits the extent.  Plot on it with
+    `transform=cartopy.crs.PlateCarree()`.
+
+    Parameters
+    ----------
+    longitude, latitude : array_like, optional
+        Positions to show (°E, °N); without them, a global map.
+    ax : cartopy GeoAxes, optional
+        Axes to draw on (made with the projection of your choice);
+        by default a new figure.
+    global_map : bool, optional
+        Force a global (True) or regional (False) map.
+    pad : float, optional
+        Margin around the positions, as a fraction of their extent, by
+        default 0.15 (at least 0.5°).
+    figsize : tuple, optional
+        Figure size, by default (11, 6) global, (8, 7) regional.
+
+    Returns
+    -------
+    fig, ax
+    """
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+    import matplotlib.ticker as mticker
+    from cartopy.mpl.ticker import LatitudeFormatter
+
+    lon = np.asarray(longitude if longitude is not None else [], float)
+    lat = np.asarray(latitude if latitude is not None else [], float)
+    ok = np.isfinite(lon) & np.isfinite(lat)
+    lon, lat = lon[ok], lat[ok]
+    if global_map is None:
+        global_map = len(lon) == 0 or np.ptp(lon) > 120 or np.ptp(lat) > 60
+    if ax is None:
+        proj = ccrs.Robinson() if global_map else ccrs.PlateCarree()
+        size = figsize or ((11, 6) if global_map else (8, 7))
+        fig = plt.figure(figsize=size, layout="constrained")
+        ax = fig.add_subplot(1, 1, 1, projection=proj)
+    else:
+        fig = ax.figure
+    if global_map:
+        ax.set_global()
+        xstep, ystep = 60, 30
+    else:
+        span = max(np.ptp(lon), np.ptp(lat), 1.0)
+        m = max(pad * span, 0.5)
+        x0, x1 = lon.min() - m, lon.max() + m
+        y0, y1 = max(lat.min() - m, -90), min(lat.max() + m, 90)
+        ax.set_extent([x0, x1, y0, y1], crs=ccrs.PlateCarree())
+        step = next(
+            (g for g in _GRID_STEPS if max(x1 - x0, y1 - y0) / g <= 6),
+            60,
+        )
+        xstep = ystep = step
+    ax.add_feature(
+        cfeature.NaturalEarthFeature(
+            "physical", "land", "50m", edgecolor="none",
+            facecolor="lightgrey",
+        ),
+        zorder=0,
+    )  # fmt: skip
+    gl = ax.gridlines(
+        draw_labels=True, alpha=0.5, linestyle="--", x_inline=False,
+        y_inline=False,
+    )  # fmt: skip
+    gl.xlocator = mticker.FixedLocator(np.arange(-180, 180.1, xstep))
+    gl.ylocator = mticker.FixedLocator(np.arange(-90, 90.1, ystep))
+    gl.xformatter = mticker.FuncFormatter(lambda x, pos: _lon_label(x))
+    gl.yformatter = LatitudeFormatter()
+    gl.top_labels = gl.right_labels = False
+    gl.xlabel_style = gl.ylabel_style = {"size": 8}
+    return fig, ax
+
+
 def plot_positions(park_table, positions, annotate=False):
-    """Float track: surface fixes (open circles) and the positions
-    interpolated onto the PAL measurements (line).
+    """Float track on a map: surface fixes (open circles) and the
+    positions interpolated onto the PAL measurements (line).
 
     Parameters
     ----------
@@ -424,28 +521,33 @@ def plot_positions(park_table, positions, annotate=False):
     -------
     fig, ax
     """
+    import cartopy.crs as ccrs
+
+    pc = ccrs.PlateCarree()
     with _style():
-        fig, ax = plt.subplots(figsize=(8, 7), layout="constrained")
         p = park_table.dropna(subset=["latitude", "longitude"])
+        fig, ax = map_axes(
+            np.concatenate([p["longitude"], positions["longitude"]]),
+            np.concatenate([p["latitude"], positions["latitude"]]),
+        )
         ax.plot(
             p["longitude"], p["latitude"], color=AFTER, lw=1.5,
-            label="Interpolated at PAL measurements",
+            label="Interpolated at PAL measurements", transform=pc,
+            zorder=3,
         )  # fmt: skip
         ax.plot(
             positions["longitude"], positions["latitude"], ls="none",
             marker="o", ms=5, mfc="white", mec=AFTER, mew=1,
-            label="Surface fixes",
+            label="Surface fixes", transform=pc, zorder=4,
         )  # fmt: skip
         first, last = positions.iloc[0], positions.iloc[-1]
         for row, text, dy in ((first, "START", 6), (last, "LATEST", -14)):
             ax.annotate(
                 text, (row["longitude"], row["latitude"]), xytext=(6, dy),
+                xycoords=pc._as_mpl_transform(ax),
                 textcoords="offset points", fontsize=9, fontweight="bold",
+                zorder=5,
             )  # fmt: skip
-        lat0 = np.nanmean(positions["latitude"])
-        ax.set_aspect(1 / np.cos(np.radians(lat0)))
-        ax.set_xlabel("Longitude (°E)")
-        ax.set_ylabel("Latitude (°N)")
         ax.legend(loc="best")
         if annotate:
             gap = park_table.get("position_gap_h")

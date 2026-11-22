@@ -155,6 +155,7 @@ from .gdac import download_aux, download_core, find_dac, list_files
 from .meta import __version__, hello
 from .pipeline import process_float
 from .plot import (
+    map_axes,
     plot_ais,
     plot_all,
     plot_beta,
@@ -225,6 +226,7 @@ __all__ = [
     "gridded_profiles",
     "hello",
     "list_files",
+    "map_axes",
     "mean_profile",
     "plot_ais",
     "plot_all",
