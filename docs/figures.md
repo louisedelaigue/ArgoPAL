@@ -1,13 +1,32 @@
 # Figures
 
-```{include} ../README.md
----
-start-after: "## Figures: follow each step"
-end-before: "Examples for float 7902280"
-relative-docs: "docs/"
-relative-images: true
----
+Every step has a figure showing what it did (before → after, which data
+were used).  Each function returns `(fig, axes)`:
+
+```python
+figs = argopal.plot_all(result, save_dir="figures")  # all of them, saved at 300 dpi
+argopal.save_figure(figs["beta"], "beta.png")        # one figure, 300 dpi
+argopal.plot_all(result, annotate=True)              # + titles and notes (mode, what was skipped)
+
+argopal.plot_pal_spectra(result["park"])  # band levels + median spectrum
+argopal.plot_despike(result["pal_raw"], result["park"], band=8000, cycle=3)
+argopal.plot_park(result["park"], result["park_samples"], cycle=3)
+argopal.plot_positions(result["park"], result["positions"])
+argopal.plot_profiles(result["ts_profiles"])  # T/S profiles used for β
+argopal.plot_beta(result["beta"], band=8000)  # β vs depth, β through time
+argopal.plot_depth_correction(result["park"], beta=result["beta"])
+argopal.plot_wind(result["park"])  # wind speed, each model
 ```
+
+| step | figure |
+|---|---|
+| read / clean | `plot_pal_spectra`, `plot_despike` |
+| park data | `plot_park` |
+| positions | `plot_positions` |
+| profiles | `plot_profiles` |
+| β | `plot_beta` |
+| depth correction, spectral level | `plot_depth_correction` |
+| wind speed | `plot_wind` |
 
 ## Examples
 

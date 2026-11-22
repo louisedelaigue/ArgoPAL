@@ -36,22 +36,40 @@ applied twice; `band_normalization=` overrides it.
 
 ## Which floats have a PAL
 
-```{include} ../README.md
----
-start-after: "## Find the floats with acoustics"
-end-before: "## Get the acoustic data of a float"
-relative-docs: "docs/"
-relative-images: true
----
+No GDAC index records which floats carry a PAL, so `find_pal_floats`
+looks for the PAL spectra in every float folder of the GDAC's `aux/`
+directory (a couple of minutes; the list is saved in
+`argopal_data/pal_floats.csv` and reused for a week):
+
+```python
+floats = argopal.find_pal_floats()          # wmo, dac, dates, first/last positions
+index = argopal.read_profile_index(floats["wmo"])  # every profile: date, position
 ```
 
 ## Download and read
 
-```{include} ../README.md
----
-start-after: "## Get the acoustic data of a float"
-end-before: "## Process a float: PAL + all other float data"
-relative-docs: "docs/"
-relative-images: true
----
+```python
+pal, meta = argopal.fetch_pal(7902280)
+```
+
+This downloads the float's auxiliary files from
+`https://data-argo.ifremer.fr/aux/<dac>/<wmo>/` into
+`argopal_data/<wmo>/` (re-downloading only files that changed on the
+server) and returns:
+
+- `pal`: a DataFrame with one row per acoustic measurement, with columns
+  `cycle`, `measurement_code`, `datetime`, `pressure` and the
+  third-octave band levels `f_63Hz` … `f_25000Hz` (dB re 1 µPa; 23 bands,
+  or 9 for floats sending the reduced spectrum);
+- `meta`: the hydrophone details and the float's PAL configuration
+  (`CONFIG_Pal*` parameters).
+
+The steps can also be run separately:
+
+```python
+argopal.find_dac(7902280)              # "coriolis"
+paths = argopal.download_aux(7902280)  # aux files, incl. Rtraj_aux.nc
+pal = argopal.read_pal(paths["7902280_Rtraj_aux.nc"])
+meta = argopal.read_pal_meta(paths["7902280_meta_aux.nc"])
+argopal.download_core(7902280)  # meta, Rtraj, Sprof (CTD, BGC, GPS)
 ```

@@ -3,7 +3,7 @@
 ```{include} ../README.md
 ---
 start-after: "## Status and limitations"
-end-before: "## Get the acoustic data of a float"
+end-before: "## License"
 relative-docs: "docs/"
 relative-images: true
 ---

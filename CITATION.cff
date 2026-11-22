@@ -1,0 +1,56 @@
+cff-version: 1.2.0
+message: "If you use ArgoPAL, please cite the software and the method paper."
+title: "ArgoPAL: wind speed from passive acoustics on BGC-Argo floats"
+type: software
+authors:
+  - family-names: Delaigue
+    given-names: Louise
+version: 0.1.0b1
+date-released: 2026-11-22
+license: GPL-3.0-only
+repository-code: "https://github.com/louisedelaigue/ArgoPAL"
+url: "https://argopal.readthedocs.io"
+keywords:
+  - Argo
+  - BGC-Argo
+  - passive acoustics
+  - wind speed
+  - oceanography
+references:
+  - type: article
+    title: "Passive acoustic monitoring from profiling floats as a pathway to scalable autonomous observations of global surface wind"
+    authors:
+      - family-names: Delaigue
+        given-names: L.
+      - family-names: Cauchy
+        given-names: P.
+      - family-names: Cazau
+        given-names: D.
+      - family-names: Bonnel
+        given-names: J.
+      - family-names: Pensieri
+        given-names: S.
+      - family-names: Bozzano
+        given-names: R.
+      - family-names: Gros-Martial
+        given-names: A.
+      - family-names: Schaeffer
+        given-names: C.
+      - family-names: David
+        given-names: A.
+      - family-names: Stil
+        given-names: P.
+      - family-names: Poteau
+        given-names: A.
+      - family-names: Schmechtig
+        given-names: C.
+      - family-names: Leymarie
+        given-names: E.
+      - family-names: Claustre
+        given-names: H.
+    journal: "Ocean Science"
+    volume: 22
+    start: 101
+    end: 117
+    year: 2026
+    doi: "10.5194/os-22-101-2026"

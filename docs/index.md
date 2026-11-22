@@ -4,7 +4,7 @@
 
 ```{note}
 ArgoPAL is under active development.  Functions, options and results may
-change between versions, and the processing has so far been tested on two
+change between versions, and the processing has so far been tested on five
 floats only.  Check the [status and limitations](limitations.md) before
 relying on its output, and report problems on the
 [issue tracker](https://github.com/louisedelaigue/ArgoPAL/issues).

@@ -9,13 +9,27 @@
 
 ## Tests
 
-```{include} ../README.md
----
-start-after: "## Tests"
-relative-docs: "docs/"
-relative-images: true
----
-```
+    pytest                            # offline tests
+    pytest -m network                 # tests that download from the GDAC
+    sh .misc/update_coverage.sh       # all tests with coverage; updates the badge
+
+The coverage badge and report (`.misc/coverage.svg`, `.misc/coverage.txt`)
+are made locally with pytest-cov and genbadge, from all tests including
+the GDAC ones; rerun the script before committing changes to the code.
+
+The tests run on two floats:
+
+- **7902280** (GDAC): small slices of its aux and core files in
+  `tests/data/` (rebuild: `tests/make_fixtures.py`);
+- **the 2025 sea-trial float** of Delaigue et al. (2026), which is not on the
+  GDAC: its spectra, CTD, GPS fixes and real AIS around its track are in
+  `tests/data/float2025/` (see the README there; rebuild:
+  `tests/make_fixtures_2025.py`).  It covers full 23-band spectra
+  (3.15 kHz), band levels not normalised on board, three park depths
+  (500, 740, 1020 m) and real AIS (decoded CSV and raw NMEA).
+
+The β port is also checked against the published MATLAB depth correction
+(`tests/data/matlab_ligurian_*`).
 
 ## Documentation
 
