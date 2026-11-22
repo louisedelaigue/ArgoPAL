@@ -308,17 +308,29 @@ from the table).  Fitting, skill and uncertainty then use only the
 measurements within `fit_max_distance_km` (40 km by default; None for all)
 of the reference they were matched to, pooled across references.
 
-The float usually measures more often than the reference (e.g. every
-10 min against an hourly buoy), so several measurements share one
-reference value.  By default they are averaged first
-(`average_to_reference`): one point per reference value, the mean spectral
-level of its measurements, with the model winds computed from it.  The
-models are fitted and assessed on these points, then applied to every
-measurement; σ is then the error on the reference's time scale (e.g. an
-hourly mean).  `reference_average=False` uses every measurement against
-the reference value nearest in time.  A dict
-names the reference (`reference={"buoys": "reference_winds.csv"}` gives
-`U_buoys`) or collocates several sources separately.
+A dict names the reference (`reference={"buoys": "reference_winds.csv"}`
+gives `U_buoys`) or collocates several sources separately.
+
+**Averaging around each reference value.**  The float usually measures
+more often than the reference (e.g. every 5 min against an hourly buoy).
+By default, for each reference value, the measurements from 30 min before
+(included) to 30 min after (excluded) its time are averaged
+(`average_to_reference`): one point per reference value, with the mean
+spectral level of those measurements and the model winds computed from
+it.  The models are fitted and assessed on these points, then applied to
+every measurement; σ is then the error on the reference's time scale
+(here an hourly mean).
+
+| option | effect |
+|---|---|
+| `reference_window="1h"` (default) | ±30 min around each reference time |
+| `reference_window="30min"`, `"3h"`, … | any width; windows wider than the reference's time step overlap |
+| `reference_window="nearest"` | the measurements whose nearest reference value it is |
+| `reference_average=False` | no averaging: every measurement against the reference value nearest in time |
+
+`fit_wind_models`, `wind_skill`, `wind_uncertainty` and `plot_wind_fit`
+take the same `window=` and `average=` options (by default those of the
+fit).
 
 Steps: `collocate_reference`, `fit_wind_models` (nonlinear least squares
 from the published coefficients; adds `U_<model>_fit`), `wind_skill` /

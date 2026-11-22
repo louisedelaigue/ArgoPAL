@@ -250,8 +250,17 @@ def test_average_to_reference_one_point_per_reference_value():
     assert pts["buoy_time"].is_unique
     assert pts["n_measurements"].sum() == pal["U_buoy"].notna().sum()
     assert pts["n_measurements"].max() <= 6
-    one = pal[pal["buoy_time"] == pts["buoy_time"].iloc[5]]
+    # the window: from 30 min before (included) to 30 min after (excluded)
+    t5 = pts["buoy_time"].iloc[5]
+    dt = pal["datetime"] - t5
+    one = pal[(dt >= pd.Timedelta("-30min")) & (dt < pd.Timedelta("30min"))]
+    assert pts["n_measurements"].iloc[5] == len(one) == 6
     assert pts["spl_8000Hz"].iloc[5] == pytest.approx(one["spl_8000Hz"].mean())
+    # the reference value itself is kept, not averaged
+    assert (
+        pts["U_buoy"].iloc[5]
+        == pal.loc[pal["buoy_time"] == t5, "U_buoy"].iloc[0]
+    )
     # model winds from the averaged level, not averaged winds
     np.testing.assert_allclose(
         pts["U_nystuen2015"], argopal.wind_nystuen2015(pts["spl_8000Hz"])
@@ -259,6 +268,42 @@ def test_average_to_reference_one_point_per_reference_value():
     single = argopal.average_to_reference(pal, average=False)
     assert len(single) == pal["U_buoy"].notna().sum()
     assert (single["n_measurements"] == 1).all()
+
+
+def test_average_window_width():
+    pal = _ten_minute_float()
+    hourly = argopal.average_to_reference(pal)
+    narrow = argopal.average_to_reference(pal, window="20min")
+    assert narrow["n_measurements"].max() == 2  # -10 and 0 min
+    assert len(narrow) == len(hourly)
+    # windows wider than the time step overlap: ±1.5 h, 18 measurements
+    wide = argopal.average_to_reference(pal, window="3h")
+    assert wide["n_measurements"].max() == 18
+    assert wide["n_measurements"].sum() > hourly["n_measurements"].sum()
+    # nothing within the radius: an empty table, not an error
+    assert argopal.average_to_reference(pal, max_distance_km=-1).empty
+    # "nearest": the measurements matched to each value (nearest in time)
+    nearest = argopal.average_to_reference(pal, window="nearest")
+    assert nearest["n_measurements"].sum() == pal["U_buoy"].notna().sum()
+
+
+def test_window_carried_from_fit_to_skill_and_uncertainty():
+    pal = _ten_minute_float()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out, fits = argopal.fit_wind_models(pal, window="20min")
+        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+    assert out.attrs["wind_fits"]["window"] == "20min"
+    pts20 = argopal.average_to_reference(pal, window="20min")
+    n20 = len(pts20)
+    assert pts20["n_measurements"].max() == 2
+    assert fits["n"].iloc[0] == n20
+    assert fits["n_measurements"].iloc[0] == pts20["n_measurements"].sum()
+    skill = argopal.wind_skill(out)
+    assert skill.attrs["window"] == "20min"
+    assert (
+        q.attrs["wind_uncertainty"]["models"]["nystuen2015"]["n_points"] == n20
+    )
 
 
 def test_average_keeps_references_apart():
@@ -494,6 +539,17 @@ def test_pipeline_with_reference(offline):
             7902280, mode="raw", reference=ref, reference_average=False
         )
     assert every["wind_fits"]["n"].iloc[0] > n_avg
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        short = argopal.process_float(
+            7902280, mode="raw", reference=ref, reference_window="20min"
+        )
+    fits = short["wind_fits"]
+    assert fits.attrs["window"] == "20min"
+    assert (
+        fits["n_measurements"].iloc[0]
+        < single["wind_fits"]["n_measurements"].iloc[0]
+    )
 
 
 def test_pipeline_with_several_references_in_one_file(offline, tmp_path):

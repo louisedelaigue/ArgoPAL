@@ -4,7 +4,7 @@ argopal/__init__.py         20      0   100%
 argopal/acoustics.py       104      2    98%
 argopal/ais.py             196     15    92%
 argopal/argo.py            157      3    98%
-argopal/calibration.py     275     14    95%
+argopal/calibration.py     323     14    96%
 argopal/checks.py           44      1    98%
 argopal/clean.py            91      2    98%
 argopal/combine.py          56      0   100%
@@ -15,10 +15,10 @@ argopal/fetch.py            12      1    92%
 argopal/gdac.py             95     10    89%
 argopal/meta.py              6      0   100%
 argopal/pipeline.py         61      3    95%
-argopal/plot.py            436     48    89%
+argopal/plot.py            438     48    89%
 argopal/positions.py        52      0   100%
 argopal/read.py            107      5    95%
 argopal/reference.py       110      0   100%
 argopal/wind.py             42      0   100%
 --------------------------------------------
-TOTAL                     2144    106    95%
+TOTAL                     2194    106    95%

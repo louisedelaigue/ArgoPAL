@@ -85,16 +85,22 @@ def _within(pal, reference, max_distance_km):
 
 
 def average_to_reference(
-    pal, reference=None, max_distance_km=40.0, use=None, average=True
+    pal,
+    reference=None,
+    max_distance_km=40.0,
+    use=None,
+    average=True,
+    window="1h",
 ):
-    """Average the measurements matched to the same reference value.
+    """Average the measurements around each reference value.
 
     The float measures more often than most references (e.g. every
-    10 min against an hourly buoy wind), so several measurements share one
-    reference value.  Averaging them gives one point per reference value,
-    on the reference's own time scale: this is what `fit_wind_models`,
-    `wind_skill`, `wind_uncertainty` and `plot_wind_fit` compare by
-    default.
+    5 min against an hourly buoy wind).  For each reference value, the
+    measurements within ±`window`/2 of its time (from the same reference,
+    and within `max_distance_km` of it) are averaged: one point per
+    reference value, on the reference's own time scale.  This is what
+    `fit_wind_models`, `wind_skill`, `wind_uncertainty` and
+    `plot_wind_fit` compare by default.
 
     Parameters
     ----------
@@ -109,15 +115,27 @@ def average_to_reference(
         Further restricts the measurements.
     average : bool, optional
         False returns the selected measurements without averaging.
+    window : str or pd.Timedelta, optional
+        Width of the averaging window, centred on each reference time:
+        "1h" (default) averages the measurements from 30 min before
+        (included) to 30 min after (excluded), so that hourly windows do
+        not share measurements.  Windows wider than the reference's time step
+        overlap, so a measurement then counts towards several reference
+        values.  Only measurements collocated with the reference (with a
+        reference value within `max_time` of `collocate_reference`, 1 h
+        by default) are averaged.  "nearest" averages instead the
+        measurements matched to each reference value (the one nearest in
+        time).
 
     Returns
     -------
     pd.DataFrame
-        One row per reference value with a matched measurement: the mean
-        of every numeric column (band and spectral levels, wind speeds,
-        distance, ...), the mean time, the first cycle, the reference
-        name if any, and "n_measurements".  Levels in dB are averaged as
-        they are, as in despiking, and the model wind speeds ("U_<model>",
+        One row per reference value with at least one measurement in its
+        window: the reference value and its time, the reference name if
+        any, the mean of every numeric measurement column (band and
+        spectral levels, distance, ...), the mean time, the first cycle,
+        and "n_measurements".  Levels in dB are averaged as they are, as
+        in despiking, and the model wind speeds ("U_<model>",
         "U_<model>_fit") are computed from the averaged spectral level.
     """
     reference, ref_col = _reference_column(pal, reference)
@@ -132,18 +150,47 @@ def average_to_reference(
         out["n_measurements"] = 1
         out.attrs = dict(pal.attrs)
         return out.reset_index(drop=True)
+    if sub.empty:  # nothing close enough: no points
+        out = sub.iloc[:0].copy()
+        out["n_measurements"] = pd.Series(dtype="int64")
+        out.attrs = dict(pal.attrs)
+        return out
     name_col = f"{reference}_reference_name"
+    sigma_col = f"{reference}_sigma"
+    # values of the reference itself, not averaged over measurements
+    ref_cols = [c for c in (ref_col, sigma_col) if c in sub]
     keys = [c for c in (name_col, time_col) if c in sub]
-    numeric = [c for c in sub.select_dtypes("number").columns if c not in keys]
-    agg = {c: "mean" for c in numeric}
-    if "cycle" in agg:
-        agg["cycle"] = "first"
-    if "datetime" in sub:
-        agg["datetime"] = "mean"
-    grouped = sub.groupby(keys, sort=True)
-    out = grouped.agg(agg)
-    out["n_measurements"] = grouped.size()
-    out = out.reset_index()
+    numeric = [
+        c
+        for c in sub.select_dtypes("number").columns
+        if c not in keys + ref_cols
+    ]
+    if window == "nearest":
+        grouped = sub.groupby(keys, sort=True)
+        agg = {c: "mean" for c in numeric + ref_cols}
+        if "cycle" in agg:
+            agg["cycle"] = "first"
+        if "datetime" in sub:
+            agg["datetime"] = "mean"
+        out = grouped.agg(agg)
+        out["n_measurements"] = grouped.size()
+        out = out.reset_index()
+    else:
+        half = pd.Timedelta(window) / 2
+        groups = sub.groupby(name_col) if name_col in sub else [(None, sub)]
+        out = pd.concat(
+            [
+                _window_means(g, time_col, ref_cols, numeric, half).assign(
+                    _name=name
+                )
+                for name, g in groups
+            ],
+            ignore_index=True,
+        )
+        name = out.pop("_name")
+        if name_col in sub:
+            out.insert(0, name_col, name)
+        out = out.sort_values(keys).reset_index(drop=True)
     # model winds from the averaged level, as the refit uses them
     fitted = pal.attrs.get("wind_fits", {}).get("coefficients", {})
     for name, (func, band, _) in LITERATURE_MODELS.items():
@@ -159,6 +206,42 @@ def average_to_reference(
     return out
 
 
+def _window_means(g, time_col, ref_cols, numeric, half):
+    """Means of the measurements of one reference within ±`half` of each
+    of its values (cumulative sums: fast, windows may overlap)."""
+    g = g.sort_values("datetime")
+    t = g["datetime"].to_numpy(dtype="datetime64[ns]")
+    refs = g.drop_duplicates(time_col).sort_values(time_col)
+    tr = refs[time_col].to_numpy(dtype="datetime64[ns]")
+    lo = np.searchsorted(t, tr - half.to_timedelta64(), side="left")
+    # [t - half, t + half): back-to-back windows share no measurement
+    hi = np.searchsorted(t, tr + half.to_timedelta64(), side="left")
+    vals = g[numeric].astype(float).to_numpy()
+    finite = np.isfinite(vals)
+    zero = np.zeros((1, vals.shape[1]))
+    csum = np.vstack([zero, np.cumsum(np.where(finite, vals, 0.0), axis=0)])
+    ccnt = np.vstack([zero, np.cumsum(finite, axis=0)])
+    cnt = ccnt[hi] - ccnt[lo]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        means = (csum[hi] - csum[lo]) / cnt
+    out = pd.DataFrame(means, columns=numeric)
+    secs = (t - t[0]).astype("timedelta64[ns]").astype(float) / 1e9
+    csec = np.concatenate([[0.0], np.cumsum(secs)])
+    n = hi - lo
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean_secs = (csec[hi] - csec[lo]) / n
+    if "datetime" in g:
+        out["datetime"] = t[0] + pd.to_timedelta(mean_secs, unit="s")
+    if "cycle" in g:
+        cyc = g["cycle"].to_numpy()
+        out["cycle"] = np.where(n > 0, cyc[np.minimum(lo, len(cyc) - 1)], 0)
+    out[time_col] = tr
+    for c in ref_cols:
+        out[c] = refs[c].to_numpy()
+    out["n_measurements"] = n
+    return out[n > 0]
+
+
 def wind_skill(
     pal,
     reference=None,
@@ -166,6 +249,7 @@ def wind_skill(
     max_distance_km=40.0,
     by_reference=False,
     average=None,
+    window=None,
 ):
     """Skill of every wind estimate in a table against a reference.
 
@@ -187,6 +271,9 @@ def wind_skill(
     average : bool, optional
         Compare one point per reference value (`average_to_reference`);
         by default as for `fit_wind_models` (True if not run).
+    window : str, optional
+        Averaging window around each reference time; by default as for
+        `fit_wind_models` ("1h" if not run).
 
     Returns
     -------
@@ -202,8 +289,10 @@ def wind_skill(
         ]
     if average is None:
         average = pal.attrs.get("wind_fits", {}).get("average", True)
+    if window is None:
+        window = pal.attrs.get("wind_fits", {}).get("window", "1h")
     pts = average_to_reference(
-        pal, reference, max_distance_km, average=average
+        pal, reference, max_distance_km, average=average, window=window
     )
     name_col = f"{reference}_reference_name"
     subsets = [("all", np.ones(len(pts), dtype=bool))]
@@ -221,7 +310,11 @@ def wind_skill(
                 row["reference_name"] = label
             rows.append({**row, **m})
     out = pd.DataFrame(rows)
-    out.attrs = {"max_distance_km": max_distance_km, "average": average}
+    out.attrs = {
+        "max_distance_km": max_distance_km,
+        "average": average,
+        "window": window,
+    }
     return out
 
 
@@ -236,6 +329,7 @@ def fit_wind_models(
     max_distance_km=40.0,
     use=None,
     average=True,
+    window="1h",
 ):
     """Refit the literature wind models to a collocated reference wind.
 
@@ -243,9 +337,9 @@ def fit_wind_models(
     nonlinear least squares (scipy.optimize.curve_fit), starting from the
     published values, on the measurements within `max_distance_km` of the
     reference (as in Delaigue et al. 2026).  By default the measurements
-    matched to the same reference value are first averaged
-    (`average_to_reference`), so the fit compares one point per reference
-    value.  The refitted model is then applied to every measurement as
+    within ±30 min of each reference value are first averaged
+    (`average_to_reference`, `window`), so the fit compares one point per
+    reference value.  The refitted model is then applied to every measurement as
     "U_<model>_fit".
 
     Parameters
@@ -263,9 +357,14 @@ def fit_wind_models(
         Further restricts the measurements used for fitting (e.g. to leave
         some out for validation).
     average : bool, optional
-        Average the measurements matched to the same reference value
-        before fitting, by default True.  False fits every measurement
-        against the reference value nearest in time.
+        Average the measurements around each reference value before
+        fitting, by default True.  False fits every measurement against
+        the reference value nearest in time.
+    window : str or pd.Timedelta, optional
+        Width of the averaging window, centred on each reference time, by
+        default "1h" (30 min before to 30 min after); "nearest" averages
+        the measurements matched to each reference value.  See
+        `average_to_reference`.
 
     Returns
     -------
@@ -285,7 +384,12 @@ def fit_wind_models(
     if models is None:
         models = list(applied)
     pts = average_to_reference(
-        pal, reference, max_distance_km, use=use, average=average
+        pal,
+        reference,
+        max_distance_km,
+        use=use,
+        average=average,
+        window=window,
     )
     out = pal.copy()
     rows, coefs = [], {}
@@ -342,6 +446,7 @@ def fit_wind_models(
         "reference": reference,
         "max_distance_km": max_distance_km,
         "average": average,
+        "window": window,
         "coefficients": coefs,
     }
     fits = pd.DataFrame(rows)
@@ -349,6 +454,7 @@ def fit_wind_models(
         "reference": reference,
         "max_distance_km": max_distance_km,
         "average": average,
+        "window": window,
     }
     return out, fits
 
@@ -591,6 +697,7 @@ def wind_uncertainty(
         fits.get("max_distance_km"),
         use=use,
         average=fits.get("average", True),
+        window=fits.get("window", "1h"),
     )
     sigma_col = f"{reference}_sigma"
     rng = np.random.default_rng(seed)

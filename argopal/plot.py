@@ -837,6 +837,7 @@ def plot_wind_fit(
     reference=None,
     max_distance_km=80.0,
     average=None,
+    window=None,
     annotate=False,
 ):
     """Refitted float wind against the reference wind, one panel per model,
@@ -853,7 +854,10 @@ def plot_wind_fit(
         Colour scale limit and largest distance shown, by default 80 km.
     average : bool, optional
         One point per reference value, the mean of the measurements
-        matched to it (`average_to_reference`); by default as for
+        around it (`average_to_reference`); by default as for
+        `fit_wind_models`.
+    window : str, optional
+        Averaging window around each reference time; by default as for
         `fit_wind_models`.
     annotate : bool, optional
         Add a title and notes, by default False.
@@ -871,12 +875,15 @@ def plot_wind_fit(
         raise KeyError("Run collocate_reference and fit_wind_models first.")
     if average is None:
         average = park_table.attrs.get("wind_fits", {}).get("average", True)
+    if window is None:
+        window = park_table.attrs.get("wind_fits", {}).get("window", "1h")
     dist = park_table.get(f"{reference}_distance_km")
     df = average_to_reference(
         park_table,
         reference,
         max_distance_km if dist is not None else None,
         average=average,
+        window=window,
     )
     refs = {
         m: park_table.attrs["wind_models"]["applied"][m]["reference"]
@@ -930,7 +937,8 @@ def plot_wind_fit(
                 f"Fitted on measurements within "
                 f"{fits.get('max_distance_km')} km of the reference"
                 + (
-                    ", averaged per reference value."
+                    f", averaged over {fits.get('window', '1h')} around "
+                    "each reference value."
                     if fits.get("average", True)
                     else "."
                 ),

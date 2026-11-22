@@ -244,10 +244,13 @@ buoys.groupby("reference_name")[["latitude", "longitude"]].mean().round(2)
 
 md("""
 Each measurement is matched to the closest buoy with a value within 1 h.
-The float measures every 10 min and the buoys hourly, so the measurements
-matched to the same buoy value are averaged first: the models are fitted
-and assessed on one point per buoy hour (`reference_average=False` uses
-every measurement), then applied to every measurement.
+
+The float measures every 5 min and the buoys report hourly.  So for each
+buoy value, the measurements from **30 min before to 30 min after** its
+time are averaged first (`reference_window="1h"`, the default; any width
+can be given, e.g. `"30min"` or `"3h"`).  The models are fitted and
+assessed on these hourly points, then applied to every measurement.
+
 `fit_max_distance_km` sets the radius used for fitting, skill and
 uncertainty (40 km by default).  The buoys give no error per value, so one
 error for all of them is passed as `reference_sigma`.
@@ -384,7 +387,28 @@ park[["datetime", "U_buoys", "buoys_reference_name", "buoys_distance_km",
 """)
 
 md("""
-**Collocation window and distance.**  `max_time` sets the time window;
+**Averaging window.**  `window` in `fit_wind_models` (or
+`reference_window` in `process_float`) sets how much float data is
+averaged around each buoy value: `"1h"` (default) is 30 min before to
+30 min after.  `"nearest"` averages the measurements whose nearest buoy
+value it is, and `average=False` uses every measurement on its own.
+""")
+
+code("""
+for window in ("20min", "1h", "2h"):
+    _, fits = argopal.fit_wind_models(park, max_distance_km=40, window=window)
+    row = fits.set_index("model").loc["nystuen2015"]
+    print(f"{window:>6}: {row['n']} buoy values, "
+          f"{row['n_measurements'] / row['n']:.1f} measurements each, "
+          f"RMSE = {row['rmse_fitted']:.2f}")
+_, fits = argopal.fit_wind_models(park, max_distance_km=40, average=False)
+row = fits.set_index("model").loc["nystuen2015"]
+print(f"  none: {row['n']} measurements, RMSE = {row['rmse_fitted']:.2f}")
+""")
+
+md("""
+**Collocation time limit and distance.**  `max_time` sets how far in
+time the nearest buoy value may be;
 `max_distance_km` in `collocate_reference` blanks reference values further
 away than that (by default they are kept, so that fitting and figures can
 choose).

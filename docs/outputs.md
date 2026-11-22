@@ -102,9 +102,10 @@ Values come from the chosen data mode only (`mode=`): with
 | `U_<model>_fit_sigma_ref` | m s⁻¹ | the reference's own error |
 | `U_<model>_fit_sigma` | m s⁻¹ | combined: √(max(σ_cv² − σ_ref², 0) + σ_coef²) |
 
-By default the models are fitted on one point per reference value (the
-average of the measurements matched to it), so σ is the error of the wind
-on the reference's time scale, e.g. an hourly mean.  See
+By default the models are fitted on one point per reference value, the
+average of the measurements within ±30 min of its time
+(`reference_window="1h"`), so σ is the error of the wind on the
+reference's time scale, e.g. an hourly mean.  See
 [Wind speed](wind.md).
 
 **Ship noise** (with `ais=`)

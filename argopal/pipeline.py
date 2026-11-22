@@ -50,6 +50,7 @@ def process_float(
     fit_reference=None,
     fit_max_distance_km=40.0,
     reference_average=True,
+    reference_window="1h",
     reference_sigma=None,
     n_bootstrap=100,
     dac=None,
@@ -164,10 +165,13 @@ def process_float(
         close to the reference they are matched to, by default 40 km;
         None uses all.
     reference_average : bool, optional
-        Average the measurements matched to the same reference value
-        (e.g. the six 10-min measurements in one hourly buoy value) before
+        Average the measurements around each reference value (e.g. the
+        twelve 5-min measurements around one hourly buoy value) before
         fitting and assessing the models, by default True.  See
         `average_to_reference`.
+    reference_window : str, optional
+        Width of that averaging window, centred on each reference time, by
+        default "1h": from 30 min before to 30 min after.
     reference_sigma : float, optional
         Error of the reference wind (m s-1), removed from the empirical
         uncertainty; by default the table's wind_speed_sigma, else 0.  See
@@ -285,6 +289,7 @@ def process_float(
             reference=fit_ref,
             max_distance_km=fit_max_distance_km,
             average=reference_average,
+            window=reference_window,
         )
         extra["wind_skill"] = wind_skill(
             pal,
