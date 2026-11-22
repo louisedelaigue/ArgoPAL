@@ -2,6 +2,12 @@
 
 from .ais import flag_ships, read_ais, track_bbox
 from .argo import DEFAULT_MODE, read_park, read_profiles
+from .calibration import (
+    fit_wind_models,
+    flag_ship_deviation,
+    wind_skill,
+    wind_uncertainty,
+)
 from .clean import DEFAULT_BANDS, clean_pal, select_bands
 from .combine import attach_park
 from .constants import GDAC_URL
@@ -17,6 +23,7 @@ from .correction import (
 from .gdac import download_aux, download_core, find_dac
 from .positions import attach_positions, read_positions
 from .read import read_pal, read_pal_meta
+from .reference import collocate_reference
 from .wind import wind_literature
 
 
@@ -38,6 +45,12 @@ def process_float(
     ais_radius_km=20.0,
     ais_window="30min",
     ais_action="flag",
+    reference=None,
+    reference_max_time="1h",
+    fit_reference=None,
+    fit_max_distance_km=40.0,
+    reference_sigma=None,
+    n_bootstrap=100,
     dac=None,
     update=True,
     gdac=GDAC_URL,
@@ -65,7 +78,12 @@ def process_float(
       7. `spectral_level`: depth-corrected spectral levels
          spl_<f>Hz (dB re 1 µPa²/Hz);
       8. `wind_literature`: wind speed U_<model> from the published
-         models at 8 kHz (Vagle 1990, Nystuen 2015, Pensieri 2015).
+         models at 8 kHz (Vagle 1990, Nystuen 2015, Pensieri 2015);
+      9. (if `reference` is given) `collocate_reference`, then
+         `fit_wind_models` (refitted models U_<model>_fit, within 40 km of
+         the reference), `wind_skill` and `wind_uncertainty` (σ per
+         measurement: cross-validated, coefficient, reference, combined); with `ais` too,
+         `flag_ship_deviation` (ship nearby and wind error > RMSE).
 
     Any of the returned tables can be written with `export`, as can the
     output of any single step.
@@ -122,8 +140,34 @@ def process_float(
         Distance and half time window for a ship to count, by default
         20 km and "30min" (Delaigue et al. 2026).
     ais_action : {"flag", "remove"}, optional
-        "flag" (default) adds ships_nearby / ship_flag columns; "remove"
-        also blanks the acoustic values of flagged measurements.
+        "flag" (default) adds ships_nearby / ship_flag columns.  "remove"
+        blanks the acoustic values of measurements with a ship nearby; with
+        a `reference` too, only of those whose refitted Nystuen wind also
+        deviates from the reference by more than the RMSE (both criteria,
+        as in Delaigue et al. 2026).
+    reference : DataFrame, str or dict, optional
+        Reference wind to collocate (see `collocate_reference`): one table
+        or CSV with reference_name, datetime, latitude, longitude,
+        wind_speed and, optionally, wind_speed_sigma.  It can hold several
+        references (buoys): each measurement is matched to the closest one
+        with a value within `reference_max_time`.  A single source is named
+        "ref"; a dict, name -> source, names it (e.g. {"buoys":
+        "reference_winds.csv"}) or collocates several sources separately.
+        argopal does not download reference winds.
+    reference_max_time : str, optional
+        Largest time difference for collocation, by default "1h".
+    fit_reference : str, optional
+        Reference used to refit the models; by default the first one.
+    fit_max_distance_km : float, optional
+        Measurements used for fitting, skill and uncertainty must be this
+        close to the reference they are matched to, by default 40 km;
+        None uses all.
+    reference_sigma : float, optional
+        Error of the reference wind (m s-1), removed from the empirical
+        uncertainty; by default the table's wind_speed_sigma, else 0.  See
+        `wind_uncertainty`.
+    n_bootstrap : int, optional
+        Bootstrap refits for the coefficient uncertainty, by default 100.
     dac, update, gdac, verbose
         As for `download_aux`.
 
@@ -142,6 +186,12 @@ def process_float(
             and datetime columns, for beta_method="interpolate");
         "positions" : the surface fixes;
         "ais" : (if `ais` was given) the AIS positions used;
+        "wind_fits" : (if `reference`) published and refitted
+            coefficients of each model, with their skill;
+        "wind_skill" : (if `reference`) bias, RMSE, R² of every wind
+            estimate against the fitting reference;
+        "wind_uncertainty" : (if `reference`) the cross-validated,
+            wind-dependent σ of each refitted model, by wind-speed bin;
         "meta" : PAL sensor and configuration (`read_pal_meta`);
         "files" : file name -> local path of everything downloaded.
     """
@@ -185,7 +235,8 @@ def process_float(
             ais_positions,
             radius_km=ais_radius_km,
             window=ais_window,
-            action=ais_action,
+            # with a reference, removal waits for the deviation criterion
+            action="flag" if reference is not None else ais_action,
         )
 
     if variables is not None:
@@ -206,6 +257,37 @@ def process_float(
     pal = depth_correct(pal, beta)
     pal = spectral_level(pal, band_normalization=band_normalization)
     pal = wind_literature(pal, models=wind_models)
+
+    if reference is not None:
+        refs = reference if isinstance(reference, dict) else {"ref": reference}
+        for name, source in refs.items():
+            opts = {}
+            if isinstance(source, dict):
+                opts = {k: v for k, v in source.items() if k != "source"}
+                source = source["source"]
+            pal = collocate_reference(
+                pal, source, name=name, max_time=reference_max_time, **opts
+            )
+        fit_ref = fit_reference or next(iter(refs))
+        pal, extra["wind_fits"] = fit_wind_models(
+            pal, reference=fit_ref, max_distance_km=fit_max_distance_km
+        )
+        extra["wind_skill"] = wind_skill(
+            pal,
+            reference=fit_ref,
+            max_distance_km=fit_max_distance_km,
+            by_reference=True,
+        )
+        pal, extra["wind_uncertainty"] = wind_uncertainty(
+            pal, reference_sigma=reference_sigma, n_bootstrap=n_bootstrap
+        )
+        if ais is not None and "U_nystuen2015_fit" in pal:
+            pal = flag_ship_deviation(
+                pal,
+                reference=fit_ref,
+                max_distance_km=fit_max_distance_km,
+                action=ais_action,
+            )
 
     return {
         "park": pal,

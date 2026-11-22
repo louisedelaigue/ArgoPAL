@@ -60,6 +60,16 @@ Wind speed (literature coefficients)
     wind_nystuen2015
     wind_pensieri2015
 
+Reference wind and calibration
+------------------------------
+    read_reference
+    collocate_reference
+    fit_wind_models
+    wind_skill
+    wind_metrics
+    wind_uncertainty
+    flag_ship_deviation
+
 Acoustics
 ---------
     beta_profile
@@ -77,6 +87,7 @@ Figures (one per step)
     plot_depth_correction
     plot_ais
     plot_wind
+    plot_wind_fit
     plot_all
     save_figure
 
@@ -97,6 +108,13 @@ from .argo import (
     read_park,
     read_profiles,
     select_mode,
+)
+from .calibration import (
+    fit_wind_models,
+    flag_ship_deviation,
+    wind_metrics,
+    wind_skill,
+    wind_uncertainty,
 )
 from .checks import (
     BandLayoutWarning,
@@ -146,11 +164,14 @@ from .plot import (
     plot_positions,
     plot_profiles,
     plot_wind,
+    plot_wind_fit,
     save_figure,
 )
 from .positions import attach_positions, read_positions
 from .read import read_pal, read_pal_meta
+from .reference import collocate_reference, read_reference
 from .wind import (
+    COEFFICIENTS,
     LITERATURE_MODELS,
     wind_literature,
     wind_nystuen2015,
@@ -161,6 +182,7 @@ from .wind import (
 
 __all__ = [
     "BAND_LAYOUTS",
+    "COEFFICIENTS",
     "DEFAULT_BANDS",
     "DEFAULT_MODE",
     "LITERATURE_MODELS",
@@ -183,6 +205,7 @@ __all__ = [
     "check_band_layout",
     "check_band_order",
     "clean_pal",
+    "collocate_reference",
     "compute_beta",
     "compute_profile_betas",
     "depth_correct",
@@ -192,6 +215,8 @@ __all__ = [
     "export",
     "fetch_pal",
     "find_dac",
+    "fit_wind_models",
+    "flag_ship_deviation",
     "flag_ships",
     "gridded_profiles",
     "hello",
@@ -207,6 +232,7 @@ __all__ = [
     "plot_positions",
     "plot_profiles",
     "plot_wind",
+    "plot_wind_fit",
     "process_float",
     "read_ais",
     "read_ais_csv",
@@ -217,6 +243,7 @@ __all__ = [
     "read_park",
     "read_positions",
     "read_profiles",
+    "read_reference",
     "save_figure",
     "select_bands",
     "select_mode",
@@ -224,7 +251,10 @@ __all__ = [
     "third_octave_bandwidth",
     "track_bbox",
     "wind_literature",
+    "wind_metrics",
     "wind_nystuen2015",
     "wind_pensieri2015",
+    "wind_skill",
+    "wind_uncertainty",
     "wind_vagle1990",
 ]

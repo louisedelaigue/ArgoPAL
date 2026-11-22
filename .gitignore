@@ -140,3 +140,6 @@ dmypy.json
 
 # argopal downloads
 argopal_data/
+
+# Tutorial outputs
+examples/output/

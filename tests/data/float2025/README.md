@@ -24,6 +24,7 @@ What makes it useful as a second float:
 | `positions.csv` | surface GPS fixes (RData `technical$GPS`), cycles 41 (incl. pattern 0, before the first park) to 45 |
 | `ais_positions.csv.gz` | decoded AIS positions (the study's `ais_positions_YYYYMMDD.csv` columns), 14 Feb 12:30 – 16 Feb 02:15 UTC, within 25 km of 43.36°N 7.77°E; further away, one position per minute only (keeps the record of when the AIS feed was receiving) |
 | `ais_messages.nmea.gz` | the same, as raw NMEA sentences with tag blocks (`messages-YYYYMMDD.gz`), plus one base-station report (type 4) |
+| `dyfamed_wind.csv` | DYFAMED buoy hourly wind (Météo-France station 6100001, `ff`, m s⁻¹), 9–17 Feb 2025 |
 
 Rebuild with `python tests/make_fixtures_2025.py <WIND-FROM-FLOAT-ACOUSTICS>`
 (needs R for the GPS fixes and pyais for the NMEA slice).

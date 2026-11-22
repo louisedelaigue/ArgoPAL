@@ -171,3 +171,36 @@ if __name__ == "__main__":
     float_tables(repo)
     gps_fixes(repo)
     ais_tables(repo)
+
+
+REF_T0, REF_T1 = pd.Timestamp("2025-02-09"), pd.Timestamp("2025-02-17")
+
+
+def reference_winds(repo):
+    """DYFAMED buoy wind (Météo-France, station 6100001), 9-17 Feb 2025."""
+
+    w = pd.read_csv(
+        os.path.join(repo, "data", "meteo_france_vent", "marine.202502.csv"),
+        sep=";",
+        na_values="mq",
+        low_memory=False,
+    )
+    w = w[w["numer_sta"].astype(str) == "6100001"]
+    t = pd.to_datetime(
+        w["date"].astype("int64").astype(str), format="%Y%m%d%H%M%S"
+    )
+    dy = pd.DataFrame(
+        {
+            "datetime": t,
+            "latitude": w["lat"],
+            "longitude": w["lon"],
+            "wind_speed": w["ff"],
+            "wind_direction": w["dd"],
+        }
+    )
+    dy = dy[dy["datetime"].between(REF_T0, REF_T1)].sort_values("datetime")
+    dy.to_csv(os.path.join(OUT, "dyfamed_wind.csv"), index=False)
+
+
+if __name__ == "__main__" and len(sys.argv) > 1:
+    reference_winds(sys.argv[1])

@@ -18,6 +18,7 @@ notes (float, data mode, what was skipped and why).
 import os
 from contextlib import contextmanager
 
+import matplotlib as mpl
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,8 +70,15 @@ def save_figure(fig, path, dpi=DPI):
 
 @contextmanager
 def _style():
-    with plt.rc_context(_RC):
+    # Only the style keys are saved and restored: plt.rc_context restores
+    # every rcParam, which stops Jupyter's inline backend from showing
+    # figures made after the first one.
+    saved = {k: mpl.rcParams[k] for k in _RC}
+    mpl.rcParams.update(_RC)
+    try:
         yield
+    finally:
+        mpl.rcParams.update(saved)
 
 
 def _panel_labels(axes):
@@ -711,9 +719,33 @@ def plot_depth_correction(park_table, band=None, beta=None, annotate=False):
     return fig, (ax1, ax2)
 
 
-def plot_wind(park_table, resample="6h", annotate=False):
-    """Wind speed from each literature model, through the deployment
-    (as in Delaigue et al. 2026, Fig. 4a).
+_WIND_ORDER = ["vagle1990", "nystuen2015", "pensieri2015"]
+_WIND_SHADES = dict(zip(_WIND_ORDER, (0.1, 0.5, 0.7)))  # as in Fig. 4
+
+
+def _reference_label(park_table, reference):
+    """Label of a reference: "Reference" for a set of references or the
+    default name, else its name in capitals."""
+    info = park_table.attrs.get("references", {}).get(reference, {})
+    if reference == "ref" or len(info.get("references", {})) > 1:
+        return "Reference"
+    return reference.upper()
+
+
+def _fit_reference(park_table):
+    ref = park_table.attrs.get("wind_fits", {}).get("reference")
+    if ref is None:
+        refs = park_table.attrs.get("references", {})
+        ref = next(iter(refs), None)
+    return ref
+
+
+def plot_wind(park_table, resample="6h", reference=None, annotate=False):
+    """Wind speed from each model through the deployment (as in Delaigue
+    et al. 2026, Fig. 4): (a) published coefficients; (b) refitted
+    coefficients, if `fit_wind_models` was run, shaded ±1σ if
+    `wind_uncertainty` was run.  The reference wind, if collocated, is
+    drawn in black.
 
     Parameters
     ----------
@@ -722,40 +754,72 @@ def plot_wind(park_table, resample="6h", annotate=False):
     resample : str or None, optional
         Median over this period before plotting, by default "6h"; None
         plots every measurement.
+    reference : str, optional
+        Reference to draw; by default the one used for fitting.
     annotate : bool, optional
         Add a title and notes, by default False.
 
     Returns
     -------
-    fig, ax
+    fig, axes
     """
     info = park_table.attrs.get("wind_models", {})
     applied = info.get("applied", {})
     if not applied:
         raise KeyError("No wind columns: run wind_literature first.")
-    order = ["vagle1990", "nystuen2015", "pensieri2015"]
-    shades = dict(zip(order, (0.1, 0.5, 0.7)))  # as in Fig. 4
+    names = [m for m in _WIND_ORDER if m in applied] + [
+        m for m in applied if m not in _WIND_ORDER
+    ]
+    fitted = [m for m in names if f"U_{m}_fit" in park_table]
+    reference = reference or _fit_reference(park_table)
     cmap = plt.get_cmap("viridis")
     series = park_table.sort_values("datetime").set_index("datetime")
+
+    def _series(col):
+        u = series[col]
+        return u.resample(resample).median() if resample else u
+
+    panels = [("", "published")] + ([("_fit", "refitted")] if fitted else [])
     with _style():
-        fig, ax = plt.subplots(figsize=(12, 5), layout="constrained")
-        for name in [m for m in order if m in applied] + [
-            m for m in applied if m not in order
-        ]:
-            u = series[f"U_{name}"]
-            if resample:
-                u = u.resample(resample).median()
-            ax.plot(
-                u.index, u, color=cmap(shades.get(name, 0.3)), lw=1.2,
-                label=applied[name]["reference"],
-            )  # fmt: skip
-        ax.set_ylim(bottom=0)
-        ax.set_ylabel(
-            "Wind speed (m s$^{-1}$)"
-            + (f", {resample.replace('h', '-h')} median" if resample else "")
-        )
-        ax.legend(loc="upper right", ncols=2)
-        _date_axis(ax)
+        fig, axes = plt.subplots(
+            len(panels), 1, figsize=(12, 4.5 * len(panels)), sharex=True,
+            layout="constrained", squeeze=False,
+        )  # fmt: skip
+        axes = list(axes[:, 0])
+        for ax, (suffix, label) in zip(axes, panels):
+            if reference and f"U_{reference}" in series:
+                u = _series(f"U_{reference}")
+                ax.plot(
+                    u.index, u, color=AFTER, lw=1.2,
+                    label=_reference_label(park_table, reference),
+                )  # fmt: skip
+            for name in names if not suffix else fitted:
+                color = cmap(_WIND_SHADES.get(name, 0.3))
+                u = _series(f"U_{name}{suffix}")
+                ax.plot(
+                    u.index, u, color=color, lw=1.2,
+                    label=applied[name]["reference"],
+                )  # fmt: skip
+                sig_col = f"U_{name}_fit_sigma"
+                if suffix and sig_col in series:
+                    sig = _series(sig_col).reindex(u.index)
+                    ax.fill_between(
+                        u.index, u - sig, u + sig, color=color, alpha=0.15,
+                        lw=0,
+                    )  # fmt: skip
+            ax.set_ylim(bottom=0)
+            ax.set_ylabel(
+                f"Wind speed, {label} (m s$^{{-1}}$)"
+                + (
+                    f", {resample.replace('h', '-h')} median"
+                    if resample
+                    else ""
+                )
+            )
+            ax.legend(loc="upper right", ncols=2)
+        _date_axis(axes[-1])
+        if len(axes) > 1:
+            _panel_labels(axes)
         if annotate:
             skipped = info.get("skipped", {})
             note = (
@@ -764,12 +828,96 @@ def plot_wind(park_table, resample="6h", annotate=False):
                 if skipped
                 else None
             )
+            _annotate(fig, f"{_wmo(park_table)}wind speed", note)
+    return fig, axes
+
+
+def plot_wind_fit(
+    park_table, reference=None, max_distance_km=80.0, annotate=False
+):
+    """Refitted float wind against the reference wind, one panel per model,
+    coloured by distance to the reference (as in Delaigue et al. 2026,
+    Fig. 5), with the 1:1 line and the regression slope, intercept and R².
+
+    Parameters
+    ----------
+    park_table : pd.DataFrame
+        PAL table after `fit_wind_models`.
+    reference : str, optional
+        Reference to compare with; by default the one used for fitting.
+    max_distance_km : float, optional
+        Colour scale limit and largest distance shown, by default 80 km.
+    annotate : bool, optional
+        Add a title and notes, by default False.
+
+    Returns
+    -------
+    fig, axes
+    """
+    from .calibration import wind_metrics
+
+    reference = reference or _fit_reference(park_table)
+    ref_col = f"U_{reference}"
+    fitted = [m for m in _WIND_ORDER if f"U_{m}_fit" in park_table]
+    if not fitted or ref_col not in park_table:
+        raise KeyError("Run collocate_reference and fit_wind_models first.")
+    dist = park_table.get(f"{reference}_distance_km")
+    df = park_table
+    if dist is not None:
+        df = park_table[dist <= max_distance_km]
+    refs = {
+        m: park_table.attrs["wind_models"]["applied"][m]["reference"]
+        for m in fitted
+    }
+    lim = float(
+        np.nanmax(df[[ref_col] + [f"U_{m}_fit" for m in fitted]].to_numpy())
+    )
+    lim = np.ceil(lim / 5) * 5
+    label = _reference_label(park_table, reference)
+    with _style():
+        fig, axes = plt.subplots(
+            1, len(fitted), figsize=(5 * len(fitted) + 1, 5),
+            layout="constrained", squeeze=False,
+        )  # fmt: skip
+        axes = list(axes[0])
+        sc = None
+        for ax, name in zip(axes, fitted):
+            y = df[f"U_{name}_fit"]
+            c = df[f"{reference}_distance_km"] if dist is not None else None
+            sc = ax.scatter(
+                df[ref_col], y, c=c, cmap="viridis", vmin=0,
+                vmax=max_distance_km, s=12, alpha=0.7,
+            )  # fmt: skip
+            ax.plot([0, lim], [0, lim], color=AFTER, ls="--", lw=1)
+            m = wind_metrics(y, df[ref_col])
+            ax.text(
+                0.04, 0.96,
+                f"Slope: {m['slope']:.2f}\nIntercept: {m['intercept']:.2f}"
+                f"\nR²: {m['r2']:.2f}\nRMSE: {m['rmse']:.2f}",
+                transform=ax.transAxes, va="top",
+                bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "#cccccc"},
+            )  # fmt: skip
+            ax.set_xlim(0, lim)
+            ax.set_ylim(0, lim)
+            ax.set_aspect("equal")
+            ax.set_xlabel(f"{label} wind speed (m s$^{{-1}}$)")
+            ax.set_title(refs[name], fontsize=10)
+        axes[0].set_ylabel("Float wind speed, refitted (m s$^{-1}$)")
+        _panel_labels(axes)
+        if dist is not None and sc is not None:
+            cb = fig.colorbar(sc, ax=axes, pad=0.02, aspect=30)
+            cb.set_label(
+                f"Distance from {label.replace('Reference', 'reference')} (km)"
+            )
+        if annotate:
+            fits = park_table.attrs.get("wind_fits", {})
             _annotate(
                 fig,
-                f"{_wmo(park_table)}wind speed, literature coefficients",
-                note,
+                f"{_wmo(park_table)}refitted models vs {reference}",
+                f"Fitted on measurements within "
+                f"{fits.get('max_distance_km')} km of the reference.",
             )
-    return fig, ax
+    return fig, axes
 
 
 def plot_ais(park_table, band=None, annotate=False):
@@ -894,6 +1042,8 @@ def plot_all(
         figs["ais"] = plot_ais(result["park"], band=band, **a)[0]
     if result["park"].attrs.get("wind_models", {}).get("applied"):
         figs["wind"] = plot_wind(result["park"], **a)[0]
+    if any(c.endswith("_fit") for c in result["park"]):
+        figs["wind_fit"] = plot_wind_fit(result["park"], **a)[0]
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
         for name, fig in figs.items():

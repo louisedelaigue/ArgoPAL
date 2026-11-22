@@ -20,7 +20,7 @@ import warnings
 import numpy as np
 
 
-def wind_vagle1990(spl_8khz):
+def wind_vagle1990(spl_8khz, a=7.38, b=-38.70, c=21.69):
     """Vagle et al. (1990): log-quadratic model at 8 kHz (Eq. 2).
 
     SPL = 21.69 + 38.70 x - 7.38 x² with x = log10(U), solved for the
@@ -35,8 +35,11 @@ def wind_vagle1990(spl_8khz):
     ----------
     spl_8khz : array_like
         Depth-corrected spectral level at 8 kHz (dB re 1 µPa² Hz⁻¹).
+    a, b, c : float, optional
+        Coefficients of SPL = c - b x - a x²; by default the published
+        values (7.38, -38.70, 21.69).  Refitted values come from
+        `fit_wind_models`.
     """
-    a, b, c = 7.38, -38.70, 21.69
     spl = np.asarray(spl_8khz, dtype=float)
     disc = b**2 - 4 * a * (spl - c)
     with np.errstate(invalid="ignore"):
@@ -44,46 +47,80 @@ def wind_vagle1990(spl_8khz):
     return 10 ** ((-b - root) / (2 * a))
 
 
-def wind_nystuen2015(spl_8khz):
+def wind_nystuen2015(spl_8khz, a3=0.0005, a2=-0.0310, a1=0.4904, a0=2.0871):
     """Nystuen et al. (2015): cubic model at 8 kHz (Eq. 3).
 
-        U = 0.0005 SPL³ - 0.0310 SPL² + 0.4904 SPL + 2.0871
+        U = a3 SPL³ + a2 SPL² + a1 SPL + a0
+          = 0.0005 SPL³ - 0.0310 SPL² + 0.4904 SPL + 2.0871   (published)
 
     Parameters
     ----------
     spl_8khz : array_like
         Depth-corrected spectral level at 8 kHz (dB re 1 µPa² Hz⁻¹).
+    a3, a2, a1, a0 : float, optional
+        Coefficients; by default the published values.
     """
     spl = np.asarray(spl_8khz, dtype=float)
-    return 0.0005 * spl**3 - 0.0310 * spl**2 + 0.4904 * spl + 2.0871
+    return a3 * spl**3 + a2 * spl**2 + a1 * spl + a0
 
 
-def wind_pensieri2015(spl_8khz, valid_range=(30.0, 60.0)):
+def wind_pensieri2015(
+    spl_8khz,
+    a1=0.1458,
+    b1=-3.146,
+    a2=0.044642,
+    b2=-3.2917,
+    c2=63.016,
+    valid_range=(30.0, 60.0),
+):
     """Pensieri et al. (2015): two-regime model at 8 kHz (Eq. 4).
 
-        U = 0.1458 SPL - 3.146                        SPL < 38 dB
-        U = 0.044642 SPL² - 3.2917 SPL + 63.016       SPL >= 38 dB
+        U = a1 SPL + b1                 30 <= SPL < 38 dB  (low regime)
+        U = a2 SPL² + b2 SPL + c2       38 <= SPL < 60 dB  (high regime)
+
+    The regimes meet at 38 dB (2.39 m s-1), as in the paper (Eq. 4).  The
+    outer limits, 30 and 60 dB, come from the code of Delaigue et al.
+    (2026) that produced its results; the paper's Eq. 4 leaves the regimes
+    open-ended (`valid_range=None`).
+
+    with published coefficients 0.1458, -3.146 and 0.044642, -3.2917,
+    63.016.
 
     Parameters
     ----------
     spl_8khz : array_like
         Depth-corrected spectral level at 8 kHz (dB re 1 µPa² Hz⁻¹).
+    a1, b1, a2, b2, c2 : float, optional
+        Coefficients; by default the published values.
     valid_range : (float, float) or None, optional
-        SPL range (dB) where the model is applied, NaN outside; by default
-        30 <= SPL < 60 dB, as in the code of Delaigue et al. (2026).  None
-        applies it everywhere.
+        Lower limit of the low regime and upper limit of the high regime
+        (dB), NaN outside; by default (30, 60).  None leaves both regimes
+        open-ended, as written in the paper.
     """
     spl = np.asarray(spl_8khz, dtype=float)
     u = np.where(
         spl < 38,
-        0.1458 * spl - 3.146,
-        0.044642 * spl**2 - 3.2917 * spl + 63.016,
+        a1 * spl + b1,
+        a2 * spl**2 + b2 * spl + c2,
     )
     if valid_range is not None:
         lo, hi = valid_range
         u = np.where((spl >= lo) & (spl < hi), u, np.nan)
     return np.where(np.isfinite(spl), u, np.nan)
 
+
+# Published coefficients, in the order of each function's arguments
+COEFFICIENTS = {
+    "vagle1990": {"a": 7.38, "b": -38.70, "c": 21.69},
+    "nystuen2015": {"a3": 0.0005, "a2": -0.0310, "a1": 0.4904, "a0": 2.0871},
+    "pensieri2015": {
+        "a1": 0.1458,
+        "b1": -3.146,
+        "a2": 0.044642,
+        "b2": -3.2917,
+        "c2": 63.016,
+    },
+}
 
 # name -> (function, band in Hz, reference)
 LITERATURE_MODELS = {
