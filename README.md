@@ -3,7 +3,7 @@
 </p>
 
 [![Tests](https://github.com/louisedelaigue/ArgoPAL/actions/workflows/run-tests.yml/badge.svg)](https://github.com/louisedelaigue/ArgoPAL/actions/workflows/run-tests.yml)
-[![Documentation](https://app.readthedocs.org/projects/argopal/badge/?version=latest)](https://argopal.readthedocs.io/en/latest/)
+[![Coverage](.misc/coverage.svg)](.misc/coverage.txt)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 Wind from passive acoustics on BGC-Argo floats.
@@ -339,8 +339,13 @@ ap.hello()
 
 ## Tests
 
-    pytest             # offline tests
-    pytest -m network  # tests that download from the GDAC
+    pytest                            # offline tests
+    pytest -m network                 # tests that download from the GDAC
+    sh .misc/update_coverage.sh       # all tests with coverage; updates the badge
+
+The coverage badge and report (`.misc/coverage.svg`, `.misc/coverage.txt`)
+are made locally with pytest-cov and genbadge, from all tests including
+the GDAC ones; rerun the script before committing changes to the code.
 
 The tests run on two floats:
 

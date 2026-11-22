@@ -64,8 +64,13 @@ combine-as-imports = true
 force-single-line = false
 lines-after-imports = 2
 
+[tool.coverage.run]
+source = ["argopal"]
+
 [dependency-groups]
 dev = [
     "ipykernel",
+    "genbadge[coverage]",
     "pytest",
+    "pytest-cov",
 ]

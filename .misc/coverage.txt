@@ -1,0 +1,24 @@
+Name                     Stmts   Miss  Cover
+--------------------------------------------
+argopal/__init__.py         20      0   100%
+argopal/acoustics.py       104      2    98%
+argopal/ais.py             196     15    92%
+argopal/argo.py            157      3    98%
+argopal/calibration.py     239     15    94%
+argopal/checks.py           44      1    98%
+argopal/clean.py            91      2    98%
+argopal/combine.py          56      0   100%
+argopal/constants.py        13      0   100%
+argopal/correction.py      181      1    99%
+argopal/export.py           86      1    99%
+argopal/fetch.py            12      1    92%
+argopal/gdac.py             95     10    89%
+argopal/meta.py              6      0   100%
+argopal/pipeline.py         61      3    95%
+argopal/plot.py            436     48    89%
+argopal/positions.py        52      0   100%
+argopal/read.py            107      5    95%
+argopal/reference.py       107      0   100%
+argopal/wind.py             42      0   100%
+--------------------------------------------
+TOTAL                     2105    107    95%

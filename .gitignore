@@ -147,3 +147,8 @@ examples/output/
 # Documentation build
 docs/_build/
 docs/tutorial.ipynb
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
