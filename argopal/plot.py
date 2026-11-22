@@ -627,8 +627,8 @@ def plot_beta(beta, band=None, depth=None, annotate=False):
 
 
 def plot_depth_correction(park_table, band=None, beta=None, annotate=False):
-    """(a) β applied to each PAL measurement, with the dates of the
-    profiles used (ticks) and the periods without β (grey); (b) the band
+    """Depth correction: (a) β applied to each PAL measurement, with the
+    dates of the profiles used (ticks) and the periods without β (grey); (b) the band
     level at park depth (grey) and the corrected spectral level (black).
 
     Parameters
@@ -741,8 +741,8 @@ def _fit_reference(park_table):
 
 
 def plot_wind(park_table, resample="6h", reference=None, annotate=False):
-    """Wind speed from each model through the deployment (as in Delaigue
-    et al. 2026, Fig. 4): (a) published coefficients; (b) refitted
+    """Wind speed from each model through the deployment, as in figure 4
+    of Delaigue et al. (2026): (a) published coefficients; (b) refitted
     coefficients, if `fit_wind_models` was run, shaded ±1σ if
     `wind_uncertainty` was run.  The reference wind, if collocated, is
     drawn in black.

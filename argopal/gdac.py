@@ -201,7 +201,7 @@ def download_aux(
     gdac=GDAC_URL,
     verbose=True,
 ):
-    """Download all auxiliary files of a float, incl. the PAL acoustics.
+    """Download all auxiliary files of a float, including the PAL acoustics.
 
     Files are saved as `data_dir/<wmo>/<wmo>_<kind>_aux.nc`, e.g.
     `argopal_data/7902280/7902280_Rtraj_aux.nc`.

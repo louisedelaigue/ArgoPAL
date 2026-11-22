@@ -21,7 +21,9 @@ import numpy as np
 
 
 def wind_vagle1990(spl_8khz, a=7.38, b=-38.70, c=21.69):
-    """Vagle et al. (1990): log-quadratic model at 8 kHz (Eq. 2).
+    """Vagle et al. (1990): log-quadratic model at 8 kHz.
+
+    Equation 2 of Delaigue et al. (2026):
 
     SPL = 21.69 + 38.70 x - 7.38 x² with x = log10(U), solved for the
     lower root:
@@ -48,7 +50,9 @@ def wind_vagle1990(spl_8khz, a=7.38, b=-38.70, c=21.69):
 
 
 def wind_nystuen2015(spl_8khz, a3=0.0005, a2=-0.0310, a1=0.4904, a0=2.0871):
-    """Nystuen et al. (2015): cubic model at 8 kHz (Eq. 3).
+    """Nystuen et al. (2015): cubic model at 8 kHz.
+
+    Equation 3 of Delaigue et al. (2026):
 
         U = a3 SPL³ + a2 SPL² + a1 SPL + a0
           = 0.0005 SPL³ - 0.0310 SPL² + 0.4904 SPL + 2.0871   (published)
@@ -73,7 +77,9 @@ def wind_pensieri2015(
     c2=63.016,
     valid_range=(30.0, 60.0),
 ):
-    """Pensieri et al. (2015): two-regime model at 8 kHz (Eq. 4).
+    """Pensieri et al. (2015): two-regime model at 8 kHz.
+
+    Equation 4 of Delaigue et al. (2026):
 
         U = a1 SPL + b1                 30 <= SPL < 38 dB  (low regime)
         U = a2 SPL² + b2 SPL + c2       38 <= SPL < 60 dB  (high regime)

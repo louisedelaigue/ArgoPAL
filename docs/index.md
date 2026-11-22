@@ -52,7 +52,7 @@ figures
 :maxdepth: 2
 :caption: Reference
 
-api
+api/index
 versions
 development
 ```
