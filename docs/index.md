@@ -1,11 +1,5 @@
 # ArgoPAL
 
-```{image} img/argopal_logo.png
-:alt: ArgoPAL
-:width: 480px
-:align: center
-```
-
 **Wind from passive acoustics on BGC-Argo floats.**
 
 ```{note}
