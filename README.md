@@ -59,10 +59,10 @@ result = argopal.process_float(7902280, reference="reference_winds.csv")
 Everything else is in the documentation, [argopal.readthedocs.io](https://argopal.readthedocs.io/en/latest/):
 
 - tutorials:
-  [from PAL data to wind speed](https://argopal.readthedocs.io/en/latest/tutorials/argopal_tutorial.html),
+  [finding PAL floats and processing several](https://argopal.readthedocs.io/en/latest/tutorials/multi_float_tutorial.html),
   [getting the PAL data](https://argopal.readthedocs.io/en/latest/tutorials/pal_data_tutorial.html) (every
   band, no further processing),
-  [finding PAL floats and processing several](https://argopal.readthedocs.io/en/latest/tutorials/multi_float_tutorial.html),
+  [from PAL data to wind speed](https://argopal.readthedocs.io/en/latest/tutorials/argopal_tutorial.html),
   [understanding the depth correction](https://argopal.readthedocs.io/en/latest/tutorials/depth_correction_tutorial.html);
 - the user guide: [data from the Argo GDAC](https://argopal.readthedocs.io/en/latest/data.html),
   [processing a float](https://argopal.readthedocs.io/en/latest/processing.html),

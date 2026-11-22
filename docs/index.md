@@ -40,9 +40,9 @@ limitations
 :maxdepth: 1
 :caption: Tutorials
 
-tutorials/argopal_tutorial
-tutorials/pal_data_tutorial
 tutorials/multi_float_tutorial
+tutorials/pal_data_tutorial
+tutorials/argopal_tutorial
 tutorials/depth_correction_tutorial
 ```
 
