@@ -12,6 +12,13 @@ speed.
 
 ## Install
 
+From GitHub:
+
+    pip install git+https://github.com/louisedelaigue/ArgoPAL.git
+    pip install "argopal[ais] @ git+https://github.com/louisedelaigue/ArgoPAL.git"  # with raw NMEA AIS
+
+From a local copy, for development:
+
     pip install -e .
 
 ## Import
@@ -29,6 +36,35 @@ three Météo-France buoys with uncertainty, AIS and export.  It downloads
 the float from the GDAC; the buoy winds it uses are in `examples/data/`.
 Rebuild it with `python examples/make_tutorial.py`, then run it from
 `examples/`.
+
+## Status and limitations
+
+Version 0.1.0b1 is a beta: the processing chain is complete and tested,
+but function names and options may still change before 1.0.  Changes are
+listed in [`docs/versions.md`](docs/versions.md).
+
+- **Calibration needs a reference.**  The published wind models were not
+  made for floats and are biased on them (e.g. +1 to +2 m s⁻¹ for Nystuen on
+  7902280).  Refitting needs reference winds (buoys) that the float
+  passes close to; argopal does not download them.  With fewer than 10
+  cycles near a reference, the coefficient uncertainty is unreliable, and
+  a refit is not to be trusted far outside the winds seen near the
+  reference.
+- **Delayed mode lags.**  The default mode uses delayed-mode profiles
+  only; recent profiles are not in delayed mode yet, so the depth
+  correction, and the wind, stop where delayed-mode data stop.
+  `mode="raw"` covers the whole record with unadjusted data.
+- **8 kHz only for wind.**  The three wind models are 8 kHz models.  Other
+  bands are processed and depth-corrected but not turned into wind.
+- **Band layouts.**  Only 23-band spectra and the 9-band subset are
+  recognised; any other layout raises an error.
+- **Ship noise needs AIS supplied by the user.**  Without AIS, ship noise
+  is reduced by despiking only.
+- **Rain is not flagged.**  Rain raises the 8 kHz level and the wind
+  estimate with it.
+- **Tested floats.**  Tested on two NKE PROVOR floats with PAL
+  hydrophones in the Ligurian Sea; floats elsewhere or with other
+  configurations may need adjustments.
 
 ## Get the acoustic data of a float
 

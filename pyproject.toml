@@ -1,6 +1,6 @@
 [build-system]
 requires = [
-    "setuptools",
+    "setuptools>=77",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -9,17 +9,20 @@ name = "argopal"
 description = "Wind from passive acoustics on BGC-Argo floats"
 readme = "README.md"
 requires-python = ">=3.11"
-classifiers =[
-    "Development Status :: 2 - Pre-Alpha",
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "Louise Delaigue" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
     "Natural Language :: English",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
     "Topic :: Scientific/Engineering :: Oceanography",
 ]
 dependencies = [
@@ -32,6 +35,10 @@ dependencies = [
     "xarray",
 ]
 dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/louisedelaigue/ArgoPAL"
+Issues = "https://github.com/louisedelaigue/ArgoPAL/issues"
 
 [project.optional-dependencies]
 ais = ["pyais"]

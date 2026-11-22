@@ -1,7 +1,7 @@
 import textwrap
 
 
-__version__ = "0.0.1"
+__version__ = "0.1.0b1"
 __author__ = "Delaigue, Louise"
 
 

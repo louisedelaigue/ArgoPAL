@@ -21,7 +21,7 @@ def code(text):
 
 
 md("""
-# argopal tutorial
+# ArgoPAL tutorial
 
 **argopal** turns the passive acoustic (PAL) measurements of BGC-Argo floats
 into surface wind speed, starting from a float's WMO number and using only
