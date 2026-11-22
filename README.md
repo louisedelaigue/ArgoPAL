@@ -2,6 +2,7 @@
   <img src="docs/img/argopal_logo.png" alt="ArgoPAL" width="480">
 </p>
 
+[![Tests](https://github.com/louisedelaigue/ArgoPAL/actions/workflows/run-tests.yml/badge.svg)](https://github.com/louisedelaigue/ArgoPAL/actions/workflows/run-tests.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 Wind from passive acoustics on BGC-Argo floats.
