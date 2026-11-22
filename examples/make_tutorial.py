@@ -43,8 +43,8 @@ This notebook walks through its functionalities on float **7902280**
 Installation:
 
 ```
-pip install argopal            # or, from the repository: pip install -e .
-pip install argopal[ais]       # optional: raw NMEA AIS files
+pip install git+https://github.com/louisedelaigue/ArgoPAL.git
+pip install "argopal[ais] @ git+https://github.com/louisedelaigue/ArgoPAL.git"  # raw NMEA AIS
 ```
 """)
 

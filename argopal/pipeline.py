@@ -174,26 +174,28 @@ def process_float(
     Returns
     -------
     dict
-        "park" : one row per PAL measurement: band levels, β, spectral
-            levels, wind speeds, position and park CTD/BGC;
-        "pal_raw" : the PAL spectra as read (all bands), before cleaning;
-        "park_samples" : the park-drift CTD/BGC samples, before
-            interpolation onto the PAL measurements;
-        "profiles" : one row per profile level;
-        "ts_profiles" : the T/S profiles used for β, on a regular grid;
-        "mean_profile" : (beta_method="mean" only) the mean T/S profile;
-        "beta" : β of every band at each depth (per profile, with cycle
-            and datetime columns, for beta_method="interpolate");
-        "positions" : the surface fixes;
-        "ais" : (if `ais` was given) the AIS positions used;
-        "wind_fits" : (if `reference`) published and refitted
-            coefficients of each model, with their skill;
-        "wind_skill" : (if `reference`) bias, RMSE, R² of every wind
-            estimate against the fitting reference;
-        "wind_uncertainty" : (if `reference`) the cross-validated,
-            wind-dependent σ of each refitted model, by wind-speed bin;
-        "meta" : PAL sensor and configuration (`read_pal_meta`);
-        "files" : file name -> local path of everything downloaded.
+        With keys:
+
+        - "park" : one row per PAL measurement: band levels, β, spectral
+          levels, wind speeds, position and park CTD/BGC;
+        - "pal_raw" : the PAL spectra as read (all bands), before cleaning;
+        - "park_samples" : the park-drift CTD/BGC samples, before
+          interpolation onto the PAL measurements;
+        - "profiles" : one row per profile level;
+        - "ts_profiles" : the T/S profiles used for β, on a regular grid;
+        - "mean_profile" : (beta_method="mean" only) the mean T/S profile;
+        - "beta" : β of every band at each depth (per profile, with cycle
+          and datetime columns, for beta_method="interpolate");
+        - "positions" : the surface fixes;
+        - "ais" : (if `ais` was given) the AIS positions used;
+        - "wind_fits" : (if `reference`) published and refitted
+          coefficients of each model, with their skill;
+        - "wind_skill" : (if `reference`) bias, RMSE, R² of every wind
+          estimate against the fitting reference;
+        - "wind_uncertainty" : (if `reference`) the cross-validated,
+          wind-dependent σ of each refitted model, by wind-speed bin;
+        - "meta" : PAL sensor and configuration (`read_pal_meta`);
+        - "files" : file name -> local path of everything downloaded.
     """
     if beta_method not in BETA_METHODS:
         raise ValueError(f"beta_method must be one of {BETA_METHODS}.")

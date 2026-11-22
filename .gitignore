@@ -143,3 +143,7 @@ argopal_data/
 
 # Tutorial outputs
 examples/output/
+
+# Documentation build
+docs/_build/
+docs/tutorial.ipynb

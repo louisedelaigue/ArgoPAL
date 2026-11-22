@@ -267,7 +267,7 @@ def read_ais(source, bbox=None, verbose=False):
     ----------
     source : pd.DataFrame, str or list of str
         A table (columns datetime, mmsi, latitude, longitude), a file, a
-        folder, a glob pattern (e.g. "AIS/messages-*.gz") or a list of
+        folder, a glob pattern (e.g. `"AIS/messages-*.gz"`) or a list of
         files.  CSV and raw NMEA files are told apart by their content.
     bbox : (west, east, south, north), optional
         Keep only positions inside this box (degrees); reading many days of

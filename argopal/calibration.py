@@ -264,8 +264,9 @@ def flag_ship_deviation(
 
     The RMSE is computed between `wind` and the reference on measurements
     without a ship nearby (ship_flag False) within `max_distance_km`.  A
-    measurement is "ship_contaminated" when ship_flag is True and its
-    |wind - reference| exceeds that RMSE.  Only measurements with a
+    measurement is "ship_contaminated" when ship_flag is True and the
+    absolute difference between its wind and the reference exceeds that
+    RMSE.  Only measurements with a
     reference value can be judged.
 
     Parameters
@@ -275,7 +276,7 @@ def flag_ship_deviation(
     reference : str, optional
         Name given to `collocate_reference`; optional if only one.
     wind : str, optional
-        Wind estimate to compare, without the "U_" prefix; by default the
+        Wind estimate to compare, without the `"U_"` prefix; by default the
         refitted Nystuen et al. (2015) model, as in the paper.
     max_distance_km : float or None, optional
         By default 40 km.

@@ -87,15 +87,17 @@ def read_pal_meta(fname_or_ds):
     -------
     dict
         With keys:
-          "wmo" : int
-          "sensor", "sensor_model", "sensor_maker", "sensor_serial_no" : str
-          "launch_config" : dict of CONFIG_Pal* name -> value at launch
-          "static_config" : dict of CONFIG_Pal* name -> value (fixed)
-          "mission_config" : pd.DataFrame of CONFIG_Pal* values that change
-              between missions, indexed by mission number
-          "band_normalization" : bool or None, from
-              CONFIG_PalBandNormalization_LOGICAL (whether the float
-              normalises band levels by bandwidth before transmission)
+
+        - "wmo" : int
+        - "sensor", "sensor_model", "sensor_maker", "sensor_serial_no" :
+          str
+        - "launch_config" : dict of `CONFIG_Pal*` name -> value at launch
+        - "static_config" : dict of `CONFIG_Pal*` name -> value (fixed)
+        - "mission_config" : pd.DataFrame of `CONFIG_Pal*` values that
+          change between missions, indexed by mission number
+        - "band_normalization" : bool or None, from
+          CONFIG_PalBandNormalization_LOGICAL (whether the float
+          normalises band levels by bandwidth before transmission)
     """
     ds, _ = _open(fname_or_ds)
 
@@ -166,15 +168,19 @@ def read_pal(fname_or_ds, meta=None):
     -------
     pd.DataFrame
         Columns:
-          cycle : int, float cycle number (adjusted if available)
-          measurement_code : int, Argo reference table 15 (290 = park drift)
-          datetime : datetime64, UTC (JULD_ADJUSTED if available)
-          pressure : float, dbar (PRES_ADJUSTED if available)
-          f_63Hz ... f_25000Hz : float, band level in dB re 1 uPa; 23
-              columns, or 9 (f_63Hz ... f_20000Hz) for a 9-band float
-          spectrum_qc : str, Argo QC flag of the spectrum
-          variance_class_1 ... variance_class_4 : float, PAL classification
-              of the standard deviation of 4 bands (NaN if not sent)
+
+        - cycle : int, float cycle number (adjusted if available)
+        - measurement_code : int, Argo reference table 15 (290 = park
+          drift)
+        - datetime : datetime64, UTC (JULD_ADJUSTED if available)
+        - pressure : float, dbar (PRES_ADJUSTED if available)
+        - f_63Hz ... f_25000Hz : float, band level in dB re 1 uPa; 23
+          columns, or 9 (f_63Hz ... f_20000Hz) for a 9-band float
+        - spectrum_qc : str, Argo QC flag of the spectrum
+        - variance_class_1 ... variance_class_4 : float, PAL
+          classification of the standard deviation of 4 bands (NaN if
+          not sent)
+
         `attrs` holds the WMO number, band frequencies, which time /
         pressure / cycle source was used, and the source file.
 

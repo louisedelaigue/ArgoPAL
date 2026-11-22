@@ -3,9 +3,12 @@
 </p>
 
 [![Tests](https://github.com/louisedelaigue/ArgoPAL/actions/workflows/run-tests.yml/badge.svg)](https://github.com/louisedelaigue/ArgoPAL/actions/workflows/run-tests.yml)
+[![Documentation](https://readthedocs.org/projects/argopal/badge/?version=latest)](https://argopal.readthedocs.io/en/latest/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 Wind from passive acoustics on BGC-Argo floats.
+
+Documentation: https://argopal.readthedocs.io
 
 ArgoPAL starts from a float's WMO number, downloads its passive acoustic
 (PAL) spectra from the Argo GDAC, and processes them into surface wind

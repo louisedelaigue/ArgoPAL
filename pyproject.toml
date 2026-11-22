@@ -38,10 +38,17 @@ dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/louisedelaigue/ArgoPAL"
+Documentation = "https://argopal.readthedocs.io"
 Issues = "https://github.com/louisedelaigue/ArgoPAL/issues"
 
 [project.optional-dependencies]
 ais = ["pyais"]
+docs = [
+    "furo",
+    "myst-nb",
+    "sphinx",
+    "sphinx-copybutton",
+]
 
 [tool.setuptools.packages.find]
 include = ["argopal*"]
