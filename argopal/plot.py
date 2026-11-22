@@ -833,7 +833,11 @@ def plot_wind(park_table, resample="6h", reference=None, annotate=False):
 
 
 def plot_wind_fit(
-    park_table, reference=None, max_distance_km=80.0, annotate=False
+    park_table,
+    reference=None,
+    max_distance_km=80.0,
+    average=None,
+    annotate=False,
 ):
     """Refitted float wind against the reference wind, one panel per model,
     coloured by distance to the reference (as in Delaigue et al. 2026,
@@ -847,6 +851,10 @@ def plot_wind_fit(
         Reference to compare with; by default the one used for fitting.
     max_distance_km : float, optional
         Colour scale limit and largest distance shown, by default 80 km.
+    average : bool, optional
+        One point per reference value, the mean of the measurements
+        matched to it (`average_to_reference`); by default as for
+        `fit_wind_models`.
     annotate : bool, optional
         Add a title and notes, by default False.
 
@@ -854,17 +862,22 @@ def plot_wind_fit(
     -------
     fig, axes
     """
-    from .calibration import wind_metrics
+    from .calibration import average_to_reference, wind_metrics
 
     reference = reference or _fit_reference(park_table)
     ref_col = f"U_{reference}"
     fitted = [m for m in _WIND_ORDER if f"U_{m}_fit" in park_table]
     if not fitted or ref_col not in park_table:
         raise KeyError("Run collocate_reference and fit_wind_models first.")
+    if average is None:
+        average = park_table.attrs.get("wind_fits", {}).get("average", True)
     dist = park_table.get(f"{reference}_distance_km")
-    df = park_table
-    if dist is not None:
-        df = park_table[dist <= max_distance_km]
+    df = average_to_reference(
+        park_table,
+        reference,
+        max_distance_km if dist is not None else None,
+        average=average,
+    )
     refs = {
         m: park_table.attrs["wind_models"]["applied"][m]["reference"]
         for m in fitted
@@ -915,7 +928,12 @@ def plot_wind_fit(
                 fig,
                 f"{_wmo(park_table)}refitted models vs {reference}",
                 f"Fitted on measurements within "
-                f"{fits.get('max_distance_km')} km of the reference.",
+                f"{fits.get('max_distance_km')} km of the reference"
+                + (
+                    ", averaged per reference value."
+                    if fits.get("average", True)
+                    else "."
+                ),
             )
     return fig, axes
 

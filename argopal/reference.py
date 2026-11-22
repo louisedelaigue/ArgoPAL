@@ -153,6 +153,7 @@ def collocate_reference(
     pd.DataFrame
         A copy of `pal` with "U_<name>" (m s-1), "<name>_distance_km",
         "<name>_dt_min" (reference time minus measurement time, minutes),
+        "<name>_time" (time of the reference value used),
         "<name>_reference_name" if the table names its references, and
         "<name>_sigma" (m s-1) if it gives their error.
     """
@@ -181,6 +182,7 @@ def collocate_reference(
 
     best_dist = np.full(n, np.inf)
     best_dt = np.full(n, np.nan)
+    best_t = np.full(n, np.datetime64("NaT", "ns"))
     best_u = np.full(n, np.nan)
     best_sigma = np.full(n, np.nan)
     best_name = np.full(n, None, dtype=object)
@@ -205,6 +207,7 @@ def collocate_reference(
         )
         best_dist = np.where(closer, dist, best_dist)
         best_dt = np.where(closer, dt, best_dt)
+        best_t = np.where(closer, tr[it], best_t)
         best_u = np.where(closer, g["wind_speed"].to_numpy(float)[it], best_u)
         if has_sigma:
             sig = g["wind_speed_sigma"].to_numpy(float)[it]
@@ -219,6 +222,7 @@ def collocate_reference(
     out[col] = best_u
     out[f"{name}_distance_km"] = best_dist
     out[f"{name}_dt_min"] = best_dt
+    out[f"{name}_time"] = best_t
     if named:
         out[f"{name}_reference_name"] = best_name
     if has_sigma:

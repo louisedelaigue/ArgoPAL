@@ -215,6 +215,83 @@ def test_uncertainty_uses_table_sigma():
     assert list(skill["reference_name"].unique()) == ["all", "A", "B"]
 
 
+def _ten_minute_float(hours=48, seed=1):
+    """A float measuring every 10 min, an hourly buoy at the float, and a
+    wind_literature table, as in `process_float`."""
+    rng = np.random.default_rng(seed)
+    t = pd.date_range(T0, periods=hours * 6, freq="10min")
+    spl = 45 + 5 * np.sin(np.arange(len(t)) / 20) + rng.normal(0, 1, len(t))
+    pal = _pal(t, spl=spl)
+    pal["cycle"] = np.repeat(np.arange(1, 9), len(t) // 8)
+    pal = ap.wind_literature(pal)
+    tb = pd.date_range(T0, periods=hours + 1, freq="1h")
+    buoy = pd.DataFrame(
+        {
+            "datetime": tb,
+            "wind_speed": np.linspace(3, 12, len(tb)),
+            "latitude": 43.38,
+            "longitude": 7.83,
+        }
+    )
+    return ap.collocate_reference(pal, buoy, name="buoy")
+
+
+def test_average_to_reference_one_point_per_reference_value():
+    pal = _ten_minute_float()
+    assert "buoy_time" in pal
+    pts = ap.average_to_reference(pal)
+    # each hourly value collects the measurements within ±30 min of it
+    assert pts["buoy_time"].is_unique
+    assert pts["n_measurements"].sum() == pal["U_buoy"].notna().sum()
+    assert pts["n_measurements"].max() <= 6
+    one = pal[pal["buoy_time"] == pts["buoy_time"].iloc[5]]
+    assert pts["spl_8000Hz"].iloc[5] == pytest.approx(one["spl_8000Hz"].mean())
+    # model winds from the averaged level, not averaged winds
+    np.testing.assert_allclose(
+        pts["U_nystuen2015"], ap.wind_nystuen2015(pts["spl_8000Hz"])
+    )
+    single = ap.average_to_reference(pal, average=False)
+    assert len(single) == pal["U_buoy"].notna().sum()
+    assert (single["n_measurements"] == 1).all()
+
+
+def test_average_keeps_references_apart():
+    pal = _pal(
+        [T0 + pd.Timedelta("10min"), T0 + pd.Timedelta("20min")],
+        lat=[43.38, 43.38 + 25 / 111.2],
+    )
+    out = ap.collocate_reference(pal, _several_references(), name="buoys")
+    pts = ap.average_to_reference(out, max_distance_km=None)
+    assert list(pts["buoys_reference_name"]) == ["A", "B"]
+
+
+def test_fit_and_skill_on_averaged_points():
+    pal = _ten_minute_float()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # covariance of a synthetic fit
+        out, fits = ap.fit_wind_models(pal)
+    n_hours = len(ap.average_to_reference(pal))
+    row = fits.set_index("model").loc["nystuen2015"]
+    assert row["n"] == n_hours
+    assert row["n_measurements"] == pal["U_buoy"].notna().sum()
+    assert out["U_nystuen2015_fit"].notna().sum() == len(pal)  # all applied
+    skill = ap.wind_skill(out).set_index("wind")
+    assert skill.loc["U_nystuen2015_fit", "n"] == n_hours
+    assert skill.loc["U_nystuen2015_fit", "rmse"] == pytest.approx(
+        row["rmse_fitted"]
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _, single = ap.fit_wind_models(pal, average=False)
+    assert single["n"].iloc[0] == pal["U_buoy"].notna().sum()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        q, _ = ap.wind_uncertainty(out, n_bootstrap=5)
+    info = q.attrs["wind_uncertainty"]["models"]["nystuen2015"]
+    assert info["n_points"] == n_hours
+    assert q["U_nystuen2015_fit_sigma"].notna().sum() == len(pal)
+
+
 # --- Metrics --------------------------------------------------------------------------
 
 
@@ -401,6 +478,14 @@ def test_pipeline_with_reference(offline):
         warnings.simplefilter("ignore")
         single = ap.process_float(7902280, mode="raw", reference=ref)
     assert "U_ref" in single["park"]
+    assert single["wind_fits"].attrs["average"] is True
+    n_avg = single["wind_fits"]["n"].iloc[0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        every = ap.process_float(
+            7902280, mode="raw", reference=ref, reference_average=False
+        )
+    assert every["wind_fits"]["n"].iloc[0] > n_avg
 
 
 def test_pipeline_with_several_references_in_one_file(offline, tmp_path):

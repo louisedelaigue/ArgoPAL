@@ -11,6 +11,7 @@ Collocation with reference winds, refitting of the models, skill and uncertainty
 
    read_reference
    collocate_reference
+   average_to_reference
    fit_wind_models
    wind_skill
    wind_metrics

@@ -110,6 +110,7 @@ from .argo import (
     select_mode,
 )
 from .calibration import (
+    average_to_reference,
     fit_wind_models,
     flag_ship_deviation,
     wind_metrics,
@@ -198,6 +199,7 @@ __all__ = [
     "attach_positions",
     "available_bands",
     "available_variables",
+    "average_to_reference",
     "band_layout_counts",
     "band_order_score",
     "bands_for",

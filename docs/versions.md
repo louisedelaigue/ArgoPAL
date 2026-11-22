@@ -1,5 +1,17 @@
 # Version history
 
+## Unreleased
+
+- Reference winds: the measurements matched to the same reference value
+  (e.g. six 10-min measurements in one hourly buoy value) are averaged
+  before the models are fitted and assessed (`average_to_reference`,
+  `reference_average=True` by default).  Comparing every measurement with
+  the hourly value gave vertical stripes in the fit figure and treated
+  measurements that share one reference value as independent.
+- `collocate_reference` adds `<name>_time`, the time of the reference
+  value used.
+- Documentation: one page per function, grouped by processing step.
+
 ## 0.1.0b1 (2026-11-22)
 
 First beta release.  The interface may still change before 1.0.

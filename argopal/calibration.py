@@ -84,8 +84,88 @@ def _within(pal, reference, max_distance_km):
     return (pal[dist_col] <= max_distance_km).to_numpy()
 
 
+def average_to_reference(
+    pal, reference=None, max_distance_km=40.0, use=None, average=True
+):
+    """Average the measurements matched to the same reference value.
+
+    The float measures more often than most references (e.g. every
+    10 min against an hourly buoy wind), so several measurements share one
+    reference value.  Averaging them gives one point per reference value,
+    on the reference's own time scale: this is what `fit_wind_models`,
+    `wind_skill`, `wind_uncertainty` and `plot_wind_fit` compare by
+    default.
+
+    Parameters
+    ----------
+    pal : pd.DataFrame
+        PAL table after `collocate_reference`.
+    reference : str, optional
+        Name given to `collocate_reference`; optional if only one.
+    max_distance_km : float or None, optional
+        Only measurements this close to their reference, by default
+        40 km.  None uses all.
+    use : array of bool, optional
+        Further restricts the measurements.
+    average : bool, optional
+        False returns the selected measurements without averaging.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per reference value with a matched measurement: the mean
+        of every numeric column (band and spectral levels, wind speeds,
+        distance, ...), the mean time, the first cycle, the reference
+        name if any, and "n_measurements".  Levels in dB are averaged as
+        they are, as in despiking, and the model wind speeds ("U_<model>",
+        "U_<model>_fit") are computed from the averaged spectral level.
+    """
+    reference, ref_col = _reference_column(pal, reference)
+    rows_ok = _within(pal, reference, max_distance_km)
+    if use is not None:
+        rows_ok = rows_ok & np.asarray(use, dtype=bool)
+    rows_ok = rows_ok & pal[ref_col].notna().to_numpy()
+    sub = pal.loc[rows_ok]
+    time_col = f"{reference}_time"
+    if not average or time_col not in sub:
+        out = sub.copy()
+        out["n_measurements"] = 1
+        out.attrs = dict(pal.attrs)
+        return out.reset_index(drop=True)
+    name_col = f"{reference}_reference_name"
+    keys = [c for c in (name_col, time_col) if c in sub]
+    numeric = [c for c in sub.select_dtypes("number").columns if c not in keys]
+    agg = {c: "mean" for c in numeric}
+    if "cycle" in agg:
+        agg["cycle"] = "first"
+    if "datetime" in sub:
+        agg["datetime"] = "mean"
+    grouped = sub.groupby(keys, sort=True)
+    out = grouped.agg(agg)
+    out["n_measurements"] = grouped.size()
+    out = out.reset_index()
+    # model winds from the averaged level, as the refit uses them
+    fitted = pal.attrs.get("wind_fits", {}).get("coefficients", {})
+    for name, (func, band, _) in LITERATURE_MODELS.items():
+        spl = f"spl_{band}Hz"
+        if spl not in out:
+            continue
+        level = out[spl].to_numpy(float)
+        if f"U_{name}" in out:
+            out[f"U_{name}"] = func(level, **COEFFICIENTS[name])
+        if f"U_{name}_fit" in out and name in fitted:
+            out[f"U_{name}_fit"] = func(level, **fitted[name])
+    out.attrs = dict(pal.attrs)
+    return out
+
+
 def wind_skill(
-    pal, reference=None, columns=None, max_distance_km=40.0, by_reference=False
+    pal,
+    reference=None,
+    columns=None,
+    max_distance_km=40.0,
+    by_reference=False,
+    average=None,
 ):
     """Skill of every wind estimate in a table against a reference.
 
@@ -104,6 +184,9 @@ def wind_skill(
         If the reference table names several references, also give the
         skill against each of them separately (column "reference_name",
         "all" for the whole set).  By default False.
+    average : bool, optional
+        Compare one point per reference value (`average_to_reference`);
+        by default as for `fit_wind_models` (True if not run).
 
     Returns
     -------
@@ -117,25 +200,28 @@ def wind_skill(
         columns = [
             c for n in names for c in (f"U_{n}", f"U_{n}_fit") if c in pal
         ]
-    near = _within(pal, reference, max_distance_km)
+    if average is None:
+        average = pal.attrs.get("wind_fits", {}).get("average", True)
+    pts = average_to_reference(
+        pal, reference, max_distance_km, average=average
+    )
     name_col = f"{reference}_reference_name"
-    subsets = [("all", near)]
-    if by_reference and name_col in pal:
-        names = pal.loc[near, name_col].dropna().unique()
+    subsets = [("all", np.ones(len(pts), dtype=bool))]
+    if by_reference and name_col in pts:
+        names = pts[name_col].dropna().unique()
         subsets += [
-            (str(r), near & (pal[name_col] == r).to_numpy())
-            for r in sorted(names)
+            (str(r), (pts[name_col] == r).to_numpy()) for r in sorted(names)
         ]
     rows = []
     for label, rows_ok in subsets:
         for c in columns:
-            m = wind_metrics(pal.loc[rows_ok, c], pal.loc[rows_ok, ref_col])
+            m = wind_metrics(pts.loc[rows_ok, c], pts.loc[rows_ok, ref_col])
             row = {"wind": c, "reference": reference}
             if len(subsets) > 1:
                 row["reference_name"] = label
             rows.append({**row, **m})
     out = pd.DataFrame(rows)
-    out.attrs = {"max_distance_km": max_distance_km}
+    out.attrs = {"max_distance_km": max_distance_km, "average": average}
     return out
 
 
@@ -149,14 +235,18 @@ def fit_wind_models(
     models=None,
     max_distance_km=40.0,
     use=None,
+    average=True,
 ):
     """Refit the literature wind models to a collocated reference wind.
 
     Each model keeps its published form; its coefficients are refitted by
     nonlinear least squares (scipy.optimize.curve_fit), starting from the
     published values, on the measurements within `max_distance_km` of the
-    reference (as in Delaigue et al. 2026).  The refitted model is then
-    applied to every measurement as "U_<model>_fit".
+    reference (as in Delaigue et al. 2026).  By default the measurements
+    matched to the same reference value are first averaged
+    (`average_to_reference`), so the fit compares one point per reference
+    value.  The refitted model is then applied to every measurement as
+    "U_<model>_fit".
 
     Parameters
     ----------
@@ -172,6 +262,10 @@ def fit_wind_models(
     use : array of bool, optional
         Further restricts the measurements used for fitting (e.g. to leave
         some out for validation).
+    average : bool, optional
+        Average the measurements matched to the same reference value
+        before fitting, by default True.  False fits every measurement
+        against the reference value nearest in time.
 
     Returns
     -------
@@ -179,8 +273,10 @@ def fit_wind_models(
         A copy with "U_<model>_fit" columns; `attrs["wind_fits"]` holds the
         coefficients.
     fits : pd.DataFrame
-        One row per model: n used, published and refitted coefficients,
-        and the skill of both on the fitting measurements (rmse, r2, bias).
+        One row per model: n points used (reference values, or
+        measurements if not averaged), n_measurements behind them,
+        published and refitted coefficients, and the skill of both on the
+        fitting points (rmse, r2, bias).
         A model that could not be refitted (too few measurements) keeps
         its row, with fitted None and NaN skill.
     """
@@ -188,9 +284,9 @@ def fit_wind_models(
     applied = pal.attrs.get("wind_models", {}).get("applied", {})
     if models is None:
         models = list(applied)
-    rows_ok = _within(pal, reference, max_distance_km)
-    if use is not None:
-        rows_ok = rows_ok & np.asarray(use, dtype=bool)
+    pts = average_to_reference(
+        pal, reference, max_distance_km, use=use, average=average
+    )
     out = pal.copy()
     rows, coefs = [], {}
     for name in models:
@@ -199,15 +295,16 @@ def fit_wind_models(
         if spl_col not in pal:
             warnings.warn(f"{name}: {band} Hz not processed, not refitted.")
             continue
-        x = pal[spl_col].to_numpy(float)
-        y = pal[ref_col].to_numpy(float)
+        x = pts[spl_col].to_numpy(float)
+        y = pts[ref_col].to_numpy(float)
         p0 = COEFFICIENTS[name]
         lit = func(x, **p0)
-        sel = rows_ok & np.isfinite(x) & np.isfinite(y) & np.isfinite(lit)
+        sel = np.isfinite(x) & np.isfinite(y) & np.isfinite(lit)
         info = {
             "model": name,
             "reference": reference,
             "n": int(sel.sum()),
+            "n_measurements": int(pts["n_measurements"].to_numpy()[sel].sum()),
             "published": p0,
             "fitted": None,
             **{f"{m}_{k}": np.nan for m in _FIT_METRICS for k in _FIT_STATS},
@@ -231,9 +328,9 @@ def fit_wind_models(
             rows.append(info)
             continue
         fitted = dict(zip(p0, map(float, popt)))
-        out[f"U_{name}_fit"] = func(x, **fitted)
+        out[f"U_{name}_fit"] = func(pal[spl_col].to_numpy(float), **fitted)
         before = wind_metrics(lit[sel], y[sel])
-        after = wind_metrics(out[f"U_{name}_fit"].to_numpy()[sel], y[sel])
+        after = wind_metrics(func(x[sel], **fitted), y[sel])
         info["fitted"] = fitted
         for m in _FIT_METRICS:
             info[f"{m}_published"] = before[m]
@@ -244,10 +341,15 @@ def fit_wind_models(
     out.attrs["wind_fits"] = {
         "reference": reference,
         "max_distance_km": max_distance_km,
+        "average": average,
         "coefficients": coefs,
     }
     fits = pd.DataFrame(rows)
-    fits.attrs = {"reference": reference, "max_distance_km": max_distance_km}
+    fits.attrs = {
+        "reference": reference,
+        "max_distance_km": max_distance_km,
+        "average": average,
+    }
     return out, fits
 
 
@@ -410,6 +512,12 @@ def wind_uncertainty(
 ):
     """Uncertainty of the refitted wind models, per measurement.
 
+    The terms are computed on the same points as the refit: by default one
+    per reference value, the mean of the measurements matched to it
+    (`average_to_reference`), so σ is the error of the wind on the
+    reference's time scale (e.g. an hourly mean against an hourly buoy
+    wind); single measurements scatter more.
+
     Three terms, each a column, and their combination:
 
     "U_<model>_fit_sigma_cv"
@@ -475,23 +583,30 @@ def wind_uncertainty(
     ref_col = f"U_{reference}"
     if models is None:
         models = list(fits["coefficients"])
-    rows_ok = _within(pal, reference, fits.get("max_distance_km"))
-    if use is not None:
-        rows_ok = rows_ok & np.asarray(use, dtype=bool)
+    # the points compared with the reference: one per reference value
+    # (averaged) unless the fit was made on single measurements
+    pts = average_to_reference(
+        pal,
+        reference,
+        fits.get("max_distance_km"),
+        use=use,
+        average=fits.get("average", True),
+    )
     sigma_col = f"{reference}_sigma"
     rng = np.random.default_rng(seed)
-    cycles_all = pal["cycle"].to_numpy()
-    y = pal[ref_col].to_numpy(float)
+    cycles_all = pts["cycle"].to_numpy()
+    y = pts[ref_col].to_numpy(float)
     out = pal.copy()
     tables, info = [], {}
     for name in models:
         func, band, _ = LITERATURE_MODELS[name]
-        x = pal[f"spl_{band}Hz"].to_numpy(float)
+        x_all = pal[f"spl_{band}Hz"].to_numpy(float)
         u_fit = pal[f"U_{name}_fit"].to_numpy(float)
+        x = pts[f"spl_{band}Hz"].to_numpy(float)
         p0 = list(fits["coefficients"][name].values())
-        sel = rows_ok & np.isfinite(x) & np.isfinite(y) & np.isfinite(u_fit)
+        sel = np.isfinite(x) & np.isfinite(y)
         cycles = pd.unique(cycles_all[sel])
-        sigma_ref = _reference_sigma(pal, sel, reference_sigma, sigma_col)
+        sigma_ref = _reference_sigma(pts, sel, reference_sigma, sigma_col)
         sigma_cv = np.full(len(pal), np.nan)
         sigma_coef = np.full(len(pal), np.nan)
         if len(cycles) < 3:
@@ -501,8 +616,8 @@ def wind_uncertainty(
             )
         else:
             # leave-one-cycle-out residuals
-            resid = np.full(len(pal), np.nan)
-            pred_cv = np.full(len(pal), np.nan)
+            resid = np.full(len(pts), np.nan)
+            pred_cv = np.full(len(pts), np.nan)
             for c in cycles:
                 test = sel & (cycles_all == c)
                 train = sel & (cycles_all != c)
@@ -537,7 +652,7 @@ def wind_uncertainty(
                     popt = _refit(func, x[idx], y[idx], p0)
                 except (RuntimeError, ValueError):
                     continue
-                preds.append(func(x, *popt))
+                preds.append(func(x_all, *popt))
             if len(preds) > 1:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", RuntimeWarning)
@@ -552,7 +667,7 @@ def wind_uncertainty(
         info[name] = {
             "sigma_ref": sigma_ref,
             "n_cycles": len(cycles),
-            "n_collocations": int(sel.sum()),
+            "n_points": int(sel.sum()),
             "n_bootstrap_ok": len(preds) if len(cycles) >= 3 else 0,
             "fitted_spl_range": (
                 [float(np.nanmin(x[sel])), float(np.nanmax(x[sel]))]

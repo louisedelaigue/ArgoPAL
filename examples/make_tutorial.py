@@ -244,6 +244,10 @@ buoys.groupby("reference_name")[["latitude", "longitude"]].mean().round(2)
 
 md("""
 Each measurement is matched to the closest buoy with a value within 1 h.
+The float measures every 10 min and the buoys hourly, so the measurements
+matched to the same buoy value are averaged first: the models are fitted
+and assessed on one point per buoy hour (`reference_average=False` uses
+every measurement), then applied to every measurement.
 `fit_max_distance_km` sets the radius used for fitting, skill and
 uncertainty (40 km by default).  The buoys give no error per value, so one
 error for all of them is passed as `reference_sigma`.
