@@ -53,7 +53,8 @@ napoleon_use_rtype = False
 html_theme = "furo"
 html_title = f"ArgoPAL {release}"
 html_logo = "img/argopal_logo.png"
-html_static_path = []
+html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 html_theme_options = {
     "source_repository": "https://github.com/louisedelaigue/ArgoPAL",
     "source_branch": "main",

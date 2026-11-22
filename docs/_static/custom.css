@@ -1,0 +1,66 @@
+/* Notebook cells (tutorial): mark outputs and style pandas tables.
+   Colours come from the Furo theme, so light and dark modes both work. */
+
+/* Output of a code cell: tinted box with an "Output" label */
+div.cell div.cell_output {
+  position: relative;
+  margin: 0.2rem 0 1.2rem;
+  padding: 1.5rem 0.9rem 0.6rem;
+  background: var(--color-background-secondary);
+  border-left: 3px solid var(--color-brand-primary);
+  border-radius: 0 0.25rem 0.25rem 0;
+  overflow-x: auto;
+}
+div.cell div.cell_output::before {
+  content: "Output";
+  position: absolute;
+  top: 0.35rem;
+  left: 0.9rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-foreground-muted);
+}
+div.cell div.cell_output .output pre {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+div.cell div.cell_output img {
+  background: #fff;  /* figures are drawn on white */
+  border-radius: 0.2rem;
+}
+
+/* pandas tables */
+div.cell_output table.dataframe {
+  border: none;
+  border-collapse: collapse;
+  margin: 0;
+  font-family: var(--font-stack--monospace);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+div.cell_output table.dataframe th,
+div.cell_output table.dataframe td {
+  border: none;
+  padding: 0.3rem 0.55rem;
+  text-align: right;
+  white-space: nowrap;
+}
+div.cell_output table.dataframe thead th {
+  border-bottom: 1px solid var(--color-foreground-border);
+  font-weight: 600;
+  vertical-align: bottom;
+}
+div.cell_output table.dataframe tbody th {
+  font-weight: normal;
+  color: var(--color-foreground-muted);
+}
+div.cell_output table.dataframe tbody tr:nth-child(even) {
+  background: var(--color-background-hover);
+}
+div.cell_output table.dataframe tbody tr:hover {
+  background: var(--color-background-border);
+}
