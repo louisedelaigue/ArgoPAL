@@ -4,7 +4,7 @@ Every public function, grouped by processing step.  All are available from
 the top-level package:
 
 ```python
-import argopal as ap
+import argopal
 ```
 
 ## Whole pipeline
@@ -174,14 +174,14 @@ Write any table, or all of them, to CSV or NetCDF, and read them back.
 
 | name | value |
 |---|---|
-| `ap.PAL_BANDS_HZ` | centre frequencies (Hz) of the 23 PAL bands |
-| `ap.PAL_BANDS_9_HZ` | centre frequencies (Hz) of the 9-band subset |
-| `ap.BAND_LAYOUTS` | number of values per spectrum -> band frequencies |
-| `ap.DEFAULT_BANDS` | bands processed by default (8 kHz) |
-| `ap.MODES` | data modes: `"delayed"`, `"adjusted"`, `"raw"` |
-| `ap.DEFAULT_MODE` | `"delayed"` |
-| `ap.COEFFICIENTS` | published coefficients of each wind model |
-| `ap.LITERATURE_MODELS` | wind model name -> (function, band, reference) |
+| `argopal.PAL_BANDS_HZ` | centre frequencies (Hz) of the 23 PAL bands |
+| `argopal.PAL_BANDS_9_HZ` | centre frequencies (Hz) of the 9-band subset |
+| `argopal.BAND_LAYOUTS` | number of values per spectrum -> band frequencies |
+| `argopal.DEFAULT_BANDS` | bands processed by default (8 kHz) |
+| `argopal.MODES` | data modes: `"delayed"`, `"adjusted"`, `"raw"` |
+| `argopal.DEFAULT_MODE` | `"delayed"` |
+| `argopal.COEFFICIENTS` | published coefficients of each wind model |
+| `argopal.LITERATURE_MODELS` | wind model name -> (function, band, reference) |
 
 ## Warnings
 

@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import argopal as ap
+import argopal
 
 
 T0 = pd.Timestamp("2025-02-14 12:00")
@@ -54,22 +54,22 @@ def _ais(rows):
 
 def test_ship_within_radius_and_window_is_flagged():
     ais = _ais([(10, 111, 5.0), (-20, 222, 15.0), (0, 333, 30.0)])
-    out = ap.flag_ships(_pal([T0]), ais)
+    out = argopal.flag_ships(_pal([T0]), ais)
     assert out["ships_nearby"].iloc[0] == 2  # 333 is 30 km away
     assert bool(out["ship_flag"].iloc[0])
 
 
 def test_ship_counted_once_per_mmsi():
     ais = _ais([(m, 111, 2.0) for m in range(0, 30, 2)])
-    assert ap.flag_ships(_pal([T0]), ais)["ships_nearby"].iloc[0] == 1
+    assert argopal.flag_ships(_pal([T0]), ais)["ships_nearby"].iloc[0] == 1
 
 
 def test_ship_outside_window_not_counted():
     ais = _ais([(45, 111, 1.0), (-45, 222, 1.0), (0, 333, 50.0)])
-    out = ap.flag_ships(_pal([T0]), ais)
+    out = argopal.flag_ships(_pal([T0]), ais)
     assert out["ships_nearby"].iloc[0] == 0
     assert not bool(out["ship_flag"].iloc[0])
-    wide = ap.flag_ships(_pal([T0]), ais, window="1h")
+    wide = argopal.flag_ships(_pal([T0]), ais, window="1h")
     assert wide["ships_nearby"].iloc[0] == 2
 
 
@@ -78,7 +78,7 @@ def test_no_ais_coverage_is_unknown_not_zero():
     far_in_time = T0 + pd.Timedelta("3h")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        out = ap.flag_ships(_pal([T0, far_in_time]), ais)
+        out = argopal.flag_ships(_pal([T0, far_in_time]), ais)
     assert out["ships_nearby"].iloc[0] == 1
     assert np.isnan(out["ships_nearby"].iloc[1])
     assert out.attrs["ais"]["n_without_coverage"] == 1
@@ -87,7 +87,7 @@ def test_no_ais_coverage_is_unknown_not_zero():
 def test_remove_blanks_acoustic_values_of_flagged_rows():
     ais = _ais([(0, 111, 1.0), (180, 222, 50.0)])
     pal = _pal([T0, T0 + pd.Timedelta("3h")])
-    out = ap.flag_ships(pal, ais, action="remove")
+    out = argopal.flag_ships(pal, ais, action="remove")
     assert (
         out[["f_8000Hz", "spl_8000Hz", "U_nystuen2015"]].iloc[0].isna().all()
     )
@@ -95,20 +95,20 @@ def test_remove_blanks_acoustic_values_of_flagged_rows():
         out[["f_8000Hz", "spl_8000Hz", "U_nystuen2015"]].iloc[1].notna().all()
     )
     with pytest.raises(ValueError, match="action"):
-        ap.flag_ships(pal, ais, action="drop")
+        argopal.flag_ships(pal, ais, action="drop")
 
 
 def test_needs_positions():
     pal = _pal([T0]).drop(columns=["latitude", "longitude"])
     with pytest.raises(KeyError, match="attach_positions"):
-        ap.flag_ships(pal, _ais([(0, 111, 1.0)]))
+        argopal.flag_ships(pal, _ais([(0, 111, 1.0)]))
 
 
 # --- read_ais: table and CSV -----------------------------------------------------
 
 
 def test_read_table():
-    ais = ap.read_ais(_ais([(5, 111, 1.0), (0, 222, 2.0)]))
+    ais = argopal.read_ais(_ais([(5, 111, 1.0), (0, 222, 2.0)]))
     assert list(ais.columns) == ["datetime", "mmsi", "latitude", "longitude"]
     assert ais["datetime"].is_monotonic_increasing
 
@@ -133,7 +133,7 @@ def _write_2025_style_csv(path):
 def test_read_2025_style_csv(tmp_path):
     path = tmp_path / "ais_positions_20250215.csv"
     _write_2025_style_csv(path)
-    ais = ap.read_ais(str(path))
+    ais = argopal.read_ais(str(path))
     # base station (4) and aid to navigation (21) dropped; time from the
     # receiver (tagblock_timestamp), not from the AIS 'timestamp' second
     assert sorted(ais["mmsi"]) == [111, 222, 333]
@@ -159,7 +159,7 @@ def test_read_common_exports(tmp_path, columns):
     df = pd.DataFrame({k: data[v] for k, v in columns.items()})
     path = tmp_path / "export.csv"
     df.to_csv(path, index=False)
-    ais = ap.read_ais(str(path))
+    ais = argopal.read_ais(str(path))
     assert ais["datetime"].iloc[0] == T0 and ais["mmsi"].iloc[0] == 111
 
 
@@ -169,7 +169,7 @@ def test_csv_without_usable_columns(tmp_path):
         path, index=False
     )
     with pytest.raises(ValueError, match="mmsi"):
-        ap.read_ais(str(path))
+        argopal.read_ais(str(path))
 
 
 def test_csv_with_only_second_of_minute_is_refused(tmp_path):
@@ -178,12 +178,12 @@ def test_csv_with_only_second_of_minute_is_refused(tmp_path):
         {"timestamp": [14], "mmsi": [1], "lat": [43.0], "lon": [7.0]}
     ).to_csv(path, index=False)
     with pytest.raises(ValueError, match="UNIX seconds"):
-        ap.read_ais(str(path))
+        argopal.read_ais(str(path))
 
 
 def test_bbox_and_folder(tmp_path):
     _write_2025_style_csv(tmp_path / "a.csv")
-    ais = ap.read_ais(str(tmp_path), bbox=(7.0, 7.845, 43.0, 44.0))
+    ais = argopal.read_ais(str(tmp_path), bbox=(7.0, 7.845, 43.0, 44.0))
     assert sorted(ais["mmsi"]) == [111, 222]
 
 
@@ -221,10 +221,10 @@ def _write_nmea(path, compress=False):
 def test_read_nmea_with_tag_blocks(tmp_path, compress):
     path = tmp_path / ("messages.gz" if compress else "messages.nmea")
     _write_nmea(path, compress)
-    ais = ap.read_ais(str(path))
+    ais = argopal.read_ais(str(path))
     assert sorted(ais["mmsi"]) == [111, 222]  # base station dropped
     assert ais["datetime"].min() == T0
-    out = ap.flag_ships(_pal([T0]), ais)
+    out = argopal.flag_ships(_pal([T0]), ais)
     assert out["ships_nearby"].iloc[0] == 2
 
 
@@ -236,7 +236,7 @@ def test_nmea_without_tag_blocks(tmp_path):
     msg = {"type": 1, "mmsi": 111, "lat": LAT0, "lon": LON0}
     path.write_text(encode_dict(msg)[0] + "\n")
     with pytest.raises(ValueError, match="tag-block"):
-        ap.read_ais(str(path))
+        argopal.read_ais(str(path))
 
 
 # --- Pipeline ------------------------------------------------------------------------
@@ -245,7 +245,7 @@ def test_nmea_without_tag_blocks(tmp_path):
 def test_pipeline_with_ais(offline):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        base = ap.process_float(7902280, mode="raw")
+        base = argopal.process_float(7902280, mode="raw")
     park = base["park"]
     # one ship 2 km from the float during the first hour of PAL data
     t = park["datetime"].min()
@@ -261,24 +261,24 @@ def test_pipeline_with_ais(offline):
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        r = ap.process_float(7902280, mode="raw", ais=ais)
+        r = argopal.process_float(7902280, mode="raw", ais=ais)
     p = r["park"]
     assert {"ships_nearby", "ship_flag"} <= set(p.columns)
     assert p["ship_flag"].any()
     assert "ais" in r
-    assert "ais" in ap.plot_all(r)
+    assert "ais" in argopal.plot_all(r)
     # without AIS: no ship columns, no figure
     assert "ships_nearby" not in park
-    assert "ais" not in ap.plot_all(base)
+    assert "ais" not in argopal.plot_all(base)
 
 
 def test_coverage_comes_from_all_received_positions_not_the_box():
     # The only ship is 300 km away: reading with a box around the float
     # drops it, but the AIS feed was receiving, so "0 ships", not unknown.
     far = _ais([(0, 111, 300.0)])
-    ais = ap.read_ais(far, bbox=(7.5, 8.2, 43.0, 43.8))
+    ais = argopal.read_ais(far, bbox=(7.5, 8.2, 43.0, 43.8))
     assert len(ais) == 0
-    out = ap.flag_ships(_pal([T0]), ais)
+    out = argopal.flag_ships(_pal([T0]), ais)
     assert out["ships_nearby"].iloc[0] == 0
     assert out.attrs["ais"]["n_without_coverage"] == 0
 
@@ -294,6 +294,6 @@ def test_several_files_coverage_is_merged(tmp_path):
                 "tagblock_timestamp": [t],
             }
         ).to_csv(tmp_path / name, index=False)
-    ais = ap.read_ais(str(tmp_path))
+    ais = argopal.read_ais(str(tmp_path))
     assert len(ais) == 2
     assert len(ais.attrs["received_minutes"]) == 2

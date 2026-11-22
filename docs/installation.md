@@ -12,8 +12,8 @@ relative-images: true
 Then:
 
 ```python
-import argopal as ap
-ap.hello()   # prints the version
+import argopal
+argopal.hello()  # prints the version
 ```
 
 Requires Python 3.11 or later.  Dependencies: gsw, matplotlib, netCDF4,

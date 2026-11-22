@@ -5,7 +5,7 @@ the netCDF4 library so every variable keeps its exact on-disk type and
 layout (char arrays, fill values, compression), i.e. they read exactly like
 files straight from the GDAC.
 
-Usage (needs the full files, e.g. from `ap.process_float(7902280)`):
+Usage (needs the full files, e.g. from `argopal.process_float(7902280)`):
 
     python tests/make_fixtures.py argopal_data/7902280
 """

@@ -4,7 +4,7 @@
 Which tables are present depends on the options:
 
 ```python
-result = ap.process_float(7902280, reference="reference_winds.csv")
+result = argopal.process_float(7902280, reference="reference_winds.csv")
 list(result)
 # ['park', 'pal_raw', 'park_samples', 'profiles', 'ts_profiles', 'beta',
 #  'positions', 'wind_fits', 'wind_skill', 'wind_uncertainty', 'meta', 'files']
@@ -223,23 +223,23 @@ Each table keeps a record of how it was made in its `attrs`, e.g.:
 ```python
 park = result["park"]
 park.attrs["wmo"], park.attrs["bands_hz"], park.attrs["bands_dropped"]
-park.attrs["despike"]            # window and percentile
-park.attrs["clean"]              # measurements removed, and why
-park.attrs["spl"]                # whether the bandwidth term was subtracted
-park.attrs["depth_correction"]   # method, profiles used, extrapolation limit
-park.attrs["wind_fits"]          # reference, radius, averaging, coefficients
-park.attrs["wind_uncertainty"]   # σ_ref, bootstrap, cycles and points per model
+park.attrs["despike"]           # window and percentile
+park.attrs["clean"]             # measurements removed, and why
+park.attrs["spl"]               # whether the bandwidth term was subtracted
+park.attrs["depth_correction"]  # method, profiles used, extrapolation limit
+park.attrs["wind_fits"]         # reference, radius, averaging, coefficients
+park.attrs["wind_uncertainty"]  # σ_ref, bootstrap, cycles and points per model
 ```
 
 ## Exported files
 
-`ap.export` writes any table, or all of them, at any stage.
+`argopal.export` writes any table, or all of them, at any stage.
 
 **CSV** (`format="csv"`, the default):
 
 ```python
-ap.export(result, "wmo7902280")         # wmo7902280_park.csv, wmo7902280_beta.csv, ...
-ap.export(result["park"], "park.csv")   # one table
+argopal.export(result, "wmo7902280")        # wmo7902280_park.csv, wmo7902280_beta.csv, ...
+argopal.export(result["park"], "park.csv")  # one table
 ```
 
 - one file per table, `<path>_<table>.csv`, with the columns above;
@@ -249,8 +249,8 @@ ap.export(result["park"], "park.csv")   # one table
 **NetCDF** (`format="netcdf"`):
 
 ```python
-ap.export(result, "wmo7902280.nc", format="netcdf")
-tables = ap.read_export("wmo7902280.nc")   # back to DataFrames, with attrs
+argopal.export(result, "wmo7902280.nc", format="netcdf")
+tables = argopal.read_export("wmo7902280.nc")  # back to DataFrames, with attrs
 ```
 
 - one file, with one group per table (`park`, `beta`, …) and the

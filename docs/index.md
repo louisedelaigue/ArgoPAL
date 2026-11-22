@@ -17,15 +17,15 @@ float's own profiles, published wind models, and calibration against
 reference buoys with uncertainty.  Ship noise can be flagged with AIS.
 
 ```python
-import argopal as ap
+import argopal
 
-result = ap.process_float(7902280)                 # download + process
-result = ap.process_float(
+result = argopal.process_float(7902280)  # download + process
+result = argopal.process_float(
     7902280,
-    reference="reference_winds.csv",               # buoy winds, optional
+    reference="reference_winds.csv",  # buoy winds, optional
 )
-figs = ap.plot_all(result, save_dir="figures")     # one figure per step
-ap.export(result, "wmo7902280.nc", format="netcdf")
+figs = argopal.plot_all(result, save_dir="figures")  # one figure per step
+argopal.export(result, "wmo7902280.nc", format="netcdf")
 ```
 
 ```{toctree}

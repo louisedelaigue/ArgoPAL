@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import argopal as ap
+import argopal
 from argopal.acoustics import _rays_on_range_grid, ray_tables
 from argopal.positions import _slerp
 
@@ -35,7 +35,7 @@ RECEIVERS = PUBLISHED["Depth_m"].to_numpy(float)
 
 
 def _beta(units, receivers=RECEIVERS):
-    return ap.beta_profile(
+    return argopal.beta_profile(
         PROFILE["Depth_m"].to_numpy(float),
         PROFILE["SoundSpeed_mps"].to_numpy(float),
         PROFILE["Temperature_degC"].to_numpy(float),
@@ -81,7 +81,7 @@ def test_beta_with_unit_fix():
 
 
 def test_beta_default_is_the_fixed_version():
-    default = ap.beta_profile(
+    default = argopal.beta_profile(
         PROFILE["Depth_m"].to_numpy(float),
         PROFILE["SoundSpeed_mps"].to_numpy(float),
         PROFILE["Temperature_degC"].to_numpy(float),
@@ -134,11 +134,15 @@ def test_beta_rejects_bad_grids():
     t = np.full(10, 13.0)
     s = np.full(10, 38.0)
     with pytest.raises(ValueError, match="evenly spaced"):
-        ap.beta_profile(d + 0.5, c, t, s, [8000], [5.0])
+        argopal.beta_profile(d + 0.5, c, t, s, [8000], [5.0])
     with pytest.raises(ValueError, match="missing"):
-        ap.beta_profile(d, np.where(d > 5, np.nan, c), t, s, [8000], [5.0])
+        argopal.beta_profile(
+            d, np.where(d > 5, np.nan, c), t, s, [8000], [5.0]
+        )
     with pytest.raises(ValueError, match="absorption_units"):
-        ap.beta_profile(d, c, t, s, [8000], [5.0], absorption_units="neper")
+        argopal.beta_profile(
+            d, c, t, s, [8000], [5.0], absorption_units="neper"
+        )
 
 
 # --- Absorption --------------------------------------------------------------
@@ -146,13 +150,13 @@ def test_beta_rejects_bad_grids():
 
 def test_absorption_increases_with_frequency():
     f = [1, 3.15, 8, 20]
-    a = [ap.absorption_francois_garrison(x, 1000, 13.5, 38.6) for x in f]
+    a = [argopal.absorption_francois_garrison(x, 1000, 13.5, 38.6) for x in f]
     assert np.all(np.diff(a) > 0)
 
 
 def test_absorption_order_of_magnitude():
     # Francois-Garrison at 8 kHz in warm Mediterranean water: ~0.5-1 dB/km
-    a = ap.absorption_francois_garrison(8, 1000, 13.5, 38.6)
+    a = argopal.absorption_francois_garrison(8, 1000, 13.5, 38.6)
     assert 0.3e-3 < a < 1.5e-3
 
 
@@ -186,7 +190,7 @@ def _profiles(cycles, bottom=1000.0, top=2.0):
 
 
 def test_mean_profile_averages_profiles():
-    mp = ap.mean_profile(_profiles([1, 3]), max_pressure=1000)
+    mp = argopal.mean_profile(_profiles([1, 3]), max_pressure=1000)
     row = mp.set_index("pressure").loc[500]
     assert row["temperature"] == pytest.approx(14 - 0.5 + 0.2)
     assert mp.attrs["cycles"] == [1, 3]
@@ -194,7 +198,7 @@ def test_mean_profile_averages_profiles():
 
 
 def test_profile_held_constant_below_deepest_point():
-    grid = ap.gridded_profiles(_profiles([1]), max_pressure=1020)
+    grid = argopal.gridded_profiles(_profiles([1]), max_pressure=1020)
     deep = grid[grid["pressure"] > 1000]
     at_1000 = grid.set_index("pressure").loc[1000, "temperature"]
     np.testing.assert_allclose(deep["temperature"], at_1000)
@@ -203,10 +207,10 @@ def test_profile_held_constant_below_deepest_point():
 
 def test_surface_held_constant_by_default():
     # Shallowest point 8 dbar: constant above it, no overshoot
-    grid = ap.gridded_profiles(_profiles([1], top=8.0), max_pressure=1000)
+    grid = argopal.gridded_profiles(_profiles([1], top=8.0), max_pressure=1000)
     g = grid.set_index("pressure")
     assert g.loc[0, "temperature"] == g.loc[8, "temperature"]
-    lin = ap.gridded_profiles(
+    lin = argopal.gridded_profiles(
         _profiles([1], top=8.0), max_pressure=1000, surface="linear"
     ).set_index("pressure")
     assert lin.loc[0, "temperature"] > lin.loc[8, "temperature"]
@@ -218,16 +222,18 @@ def test_profiles_skipped_with_reasons():
     prof = prof[~((prof["cycle"] == 3) & (prof["PRES"] < 20))]  # no surface
     prof = prof[~((prof["cycle"] == 4) & (prof["PRES"] > 80))]  # too short
     prof.attrs = {"mode": "delayed"}
-    grid = ap.gridded_profiles(prof, max_pressure=1000)
+    grid = argopal.gridded_profiles(prof, max_pressure=1000)
     assert grid.attrs["cycles"] == [1]
     assert set(grid.attrs["skipped"]) == {2, 3, 4}
     with pytest.raises(ValueError, match="No profile"):
-        ap.mean_profile(_profiles([1], bottom=60), max_pressure=1000)
+        argopal.mean_profile(_profiles([1], bottom=60), max_pressure=1000)
 
 
 def test_short_gap_at_bottom_is_accepted():
     # 975 dbar profile, PAL to 1028 dbar: held constant, not dropped
-    grid = ap.gridded_profiles(_profiles([1], bottom=975), max_pressure=1028)
+    grid = argopal.gridded_profiles(
+        _profiles([1], bottom=975), max_pressure=1028
+    )
     assert grid.attrs["cycles"] == [1]
 
 
@@ -235,8 +241,8 @@ def _two_profile_betas():
     """β of two synthetic profiles 10 days apart: one warm, one cold."""
     prof = _profiles([1, 3])
     prof.loc[prof["cycle"] == 3, "TEMP"] += 8  # strong warming near surface
-    grid = ap.gridded_profiles(prof, max_pressure=1000)
-    return ap.compute_profile_betas(grid, [8000])
+    grid = argopal.gridded_profiles(prof, max_pressure=1000)
+    return argopal.compute_profile_betas(grid, [8000])
 
 
 def test_profile_betas_one_per_profile():
@@ -260,7 +266,7 @@ def test_depth_correct_interpolates_beta_in_time():
         {"datetime": times, "pressure": 1000.0, "f_8000Hz": 45.0}
     )
     pal.attrs = {"bands_hz": [8000]}
-    out = ap.depth_correct(pal, b)
+    out = argopal.depth_correct(pal, b)
     b1 = out["beta_8000Hz"].iloc[1]
     b3 = out["beta_8000Hz"].iloc[3]
     assert b1 != pytest.approx(b3)
@@ -286,14 +292,14 @@ def test_depth_correct_no_beta_far_from_profiles():
     )
     pal.attrs = {"bands_hz": [8000]}
     with pytest.warns(UserWarning, match="no usable profile"):
-        out = ap.depth_correct(pal, b)
+        out = argopal.depth_correct(pal, b)
     assert np.isfinite(out["beta_8000Hz"].iloc[0])
     assert np.isnan(out["beta_8000Hz"].iloc[1])
 
 
 def test_mean_beta_still_available():
-    mp = ap.mean_profile(_profiles([1, 3]), max_pressure=1000)
-    b = ap.compute_beta(mp, [8000])
+    mp = argopal.mean_profile(_profiles([1, 3]), max_pressure=1000)
+    b = argopal.compute_beta(mp, [8000])
     assert b.attrs["method"] == "mean"
     pal = pd.DataFrame(
         {
@@ -303,7 +309,7 @@ def test_mean_beta_still_available():
         }
     )
     pal.attrs = {"bands_hz": [8000]}
-    out = ap.depth_correct(pal, b)
+    out = argopal.depth_correct(pal, b)
     assert np.isfinite(out["beta_8000Hz"].iloc[0])
     assert "beta_cycle_before" not in out
 
@@ -319,7 +325,7 @@ def test_depth_correct_interpolates_beta():
         {"depth": [10.0, 20.0, 1000.0], "beta_8000Hz": [0.1, 0.2, 1.0]}
     )
     beta.attrs = {"latitude": 43.5}
-    out = ap.depth_correct(_pal([0.0, 504.0]), beta)
+    out = argopal.depth_correct(_pal([0.0, 504.0]), beta)
     # 0 dbar: linear extrapolation from the two shallowest β
     assert out["beta_8000Hz"].iloc[0] == pytest.approx(0.0, abs=1e-9)
     # ~500 m: between 20 m (0.2) and 1000 m (1.0)
@@ -333,24 +339,24 @@ def test_depth_correct_warns_below_beta():
     beta = pd.DataFrame({"depth": [10.0, 20.0], "beta_8000Hz": [0.1, 0.2]})
     beta.attrs = {"latitude": 43.5}
     with pytest.warns(UserWarning, match="deeper than the deepest"):
-        out = ap.depth_correct(_pal([500.0]), beta)
+        out = argopal.depth_correct(_pal([500.0]), beta)
     assert np.isnan(out["beta_8000Hz"].iloc[0])
 
 
 def test_third_octave_bandwidth():
     # 8 kHz band: exact centre 7943 Hz, width 1833 Hz -> 32.63 dB
-    assert ap.third_octave_bandwidth(8000) == pytest.approx(1833, abs=1)
-    assert 10 * np.log10(ap.third_octave_bandwidth(8000)) == pytest.approx(
-        32.63, abs=0.01
-    )
+    assert argopal.third_octave_bandwidth(8000) == pytest.approx(1833, abs=1)
+    assert 10 * np.log10(
+        argopal.third_octave_bandwidth(8000)
+    ) == pytest.approx(32.63, abs=0.01)
 
 
 def test_spectral_level_with_and_without_band_normalisation():
     pal = _pal([1000.0])
     pal["beta_8000Hz"] = 1.0
-    on = ap.spectral_level(pal)  # attrs: normalised on board
+    on = argopal.spectral_level(pal)  # attrs: normalised on board
     assert on["spl_8000Hz"].iloc[0] == pytest.approx(46.0)
-    off = ap.spectral_level(pal, band_normalization=False)
+    off = argopal.spectral_level(pal, band_normalization=False)
     assert off["spl_8000Hz"].iloc[0] == pytest.approx(46.0 - 32.63, abs=0.01)
 
 
@@ -359,9 +365,9 @@ def test_spectral_level_needs_normalisation_and_beta():
     pal["beta_8000Hz"] = 1.0
     pal.attrs.pop("band_normalization")
     with pytest.raises(ValueError, match="normalised"):
-        ap.spectral_level(pal)
+        argopal.spectral_level(pal)
     with pytest.raises(KeyError, match="depth_correct"):
-        ap.spectral_level(_pal([1000.0]), band_normalization=True)
+        argopal.spectral_level(_pal([1000.0]), band_normalization=True)
 
 
 # --- Positions ----------------------------------------------------------------
@@ -396,7 +402,7 @@ def test_attach_positions_interpolates_without_extrapolation():
             )
         }
     )
-    out = ap.attach_positions(pal, fixes)
+    out = argopal.attach_positions(pal, fixes)
     assert np.isnan(out["latitude"].iloc[0]) and np.isnan(
         out["latitude"].iloc[2]
     )
@@ -405,7 +411,9 @@ def test_attach_positions_interpolates_without_extrapolation():
 
 
 def test_read_positions_includes_launch():
-    pos = ap.read_positions(os.path.join(DATA, "7902280_Rtraj_cycles1-2.nc"))
+    pos = argopal.read_positions(
+        os.path.join(DATA, "7902280_Rtraj_cycles1-2.nc")
+    )
     assert pos["datetime"].is_monotonic_increasing
     assert (pos["measurement_code"] == 0).sum() == 1  # launch
     assert set(pos["position_qc"]) <= {"1", "2"}
@@ -423,20 +431,20 @@ def test_shallow_profiles_serve_only_shallow_parks():
     )
     prof.loc[prof["cycle"] == 3, "TEMP"] += 8  # warm: different β
     prof.attrs = {"mode": "raw"}
-    grid = ap.gridded_profiles(prof, max_pressure=1000)
+    grid = argopal.gridded_profiles(prof, max_pressure=1000)
     assert grid.attrs["cycles"] == [1, 3]  # the 500 dbar profile is kept
     assert grid.groupby("cycle")["pressure"].max().to_dict() == {
         1: 600,
         3: 1000,
     }
-    b = ap.compute_profile_betas(grid, [8000])
+    b = argopal.compute_profile_betas(grid, [8000])
     t1, t3 = sorted(b["datetime"].unique())
     mid = t1 + (t3 - t1) / 2
     pal = pd.DataFrame(
         {"datetime": [mid, mid], "pressure": [450.0, 950.0], "f_8000Hz": 45.0}
     )
     pal.attrs = {"bands_hz": [8000]}
-    out = ap.depth_correct(pal, b)
+    out = argopal.depth_correct(pal, b)
     # 450 dbar: between the two profiles; 950 dbar: only cycle 3 reaches it
     assert list(out["beta_cycle_before"]) == [1, 3]
     assert list(out["beta_cycle_after"]) == [3, 3]

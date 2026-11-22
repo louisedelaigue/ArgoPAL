@@ -3,10 +3,10 @@
 One function per step; each draws one or two panels and returns
 ``(fig, axes)``, so figures can be shown, adjusted or saved:
 
-    fig, ax = ap.plot_despike(result["pal_raw"], result["park"])
-    ap.save_figure(fig, "despike.png")        # 300 dpi by default
+    fig, ax = argopal.plot_despike(result["pal_raw"], result["park"])
+    argopal.save_figure(fig, "despike.png")        # 300 dpi by default
 
-    ap.plot_all(result, save_dir="figures")   # every step, saved at 300 dpi
+    argopal.plot_all(result, save_dir="figures")   # every step, saved at 300 dpi
 
 Style follows Delaigue et al. (2026, Ocean Science): white background,
 framed axes, light grid, black lines (grey = before a step, dashed = a

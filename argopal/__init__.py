@@ -7,7 +7,7 @@ floats, starting from a WMO number.
 
 Code examples assume that the import convention has been followed:
 
-  >>> import argopal as ap
+  >>> import argopal
 
 The following subfunctions are then available:
 

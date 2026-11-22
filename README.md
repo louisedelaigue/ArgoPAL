@@ -36,7 +36,7 @@ From a local copy, for development:
 ## Import
 
 ```python
-import argopal as ap
+import argopal
 ```
 
 ## Tutorial
@@ -81,7 +81,7 @@ listed in [`docs/versions.md`](docs/versions.md).
 ## Get the acoustic data of a float
 
 ```python
-pal, meta = ap.fetch_pal(7902280)
+pal, meta = argopal.fetch_pal(7902280)
 ```
 
 This downloads the float's auxiliary files from
@@ -99,25 +99,28 @@ server) and returns:
 The steps can also be run separately:
 
 ```python
-ap.find_dac(7902280)                 # "coriolis"
-paths = ap.download_aux(7902280)     # aux files, incl. Rtraj_aux.nc
-pal = ap.read_pal(paths["7902280_Rtraj_aux.nc"])
-meta = ap.read_pal_meta(paths["7902280_meta_aux.nc"])
-ap.download_core(7902280)            # meta, Rtraj, Sprof (CTD, BGC, GPS)
+argopal.find_dac(7902280)              # "coriolis"
+paths = argopal.download_aux(7902280)  # aux files, incl. Rtraj_aux.nc
+pal = argopal.read_pal(paths["7902280_Rtraj_aux.nc"])
+meta = argopal.read_pal_meta(paths["7902280_meta_aux.nc"])
+argopal.download_core(7902280)  # meta, Rtraj, Sprof (CTD, BGC, GPS)
 ```
 
 ## Process a float: PAL + all other float data
 
 ```python
-ap.available_variables("argopal_data/7902280")  # what the float measured, per data mode
-result = ap.process_float(7902280)              # 8 kHz, mode="delayed" by default
-result = ap.process_float(7902280, bands=(3150, 8000))   # several bands
-result["park"]          # one row per PAL measurement: bands, β, spectral levels,
-                        # position, park T/S/O2/pH
-result["profiles"]      # one row per profile level (Sprof)
-result["ts_profiles"]   # the T/S profiles used for the depth correction
-result["beta"]          # β of every band at each depth, per profile
-result["positions"]     # launch + surface GPS fixes
+# what the float measured, per data mode
+argopal.available_variables("argopal_data/7902280")
+
+result = argopal.process_float(7902280)  # 8 kHz, mode="delayed" by default
+result = argopal.process_float(7902280, bands=(3150, 8000))  # several bands
+
+result["park"]         # one row per PAL measurement: bands, β, spectral
+                       # levels, position, park T/S/O2/pH
+result["profiles"]     # one row per profile level (Sprof)
+result["ts_profiles"]  # the T/S profiles used for the depth correction
+result["beta"]         # β of every band at each depth, per profile
+result["positions"]    # launch + surface GPS fixes
 ```
 
 The main table is `result["park"]`, one row per acoustic measurement:
@@ -181,13 +184,13 @@ Every variable `X` comes with `X_qc` and `X_data_mode` columns.
 
 ### Export at any stage
 
-`ap.export` writes one table or any set of tables, from any step:
+`argopal.export` writes one table or any set of tables, from any step:
 
 ```python
-ap.export(result, "wmo7902280", format="csv")         # one CSV per table
-ap.export(result, "wmo7902280.nc", format="netcdf")   # one file, one group per table
-ap.export(ap.clean_pal(pal), "pal_clean.csv")         # a single intermediate table
-ap.read_export("wmo7902280.nc")                       # back to DataFrames
+argopal.export(result, "wmo7902280", format="csv")        # one CSV per table
+argopal.export(result, "wmo7902280.nc", format="netcdf")  # one file, one group per table
+argopal.export(argopal.clean_pal(pal), "pal_clean.csv")   # a single intermediate table
+argopal.read_export("wmo7902280.nc")                      # back to DataFrames
 ```
 
 CSV gives one file per table, without the processing record; NetCDF keeps
@@ -226,13 +229,13 @@ vessel positions, `process_float` flags each PAL measurement with a ship
 within 20 km of the float and ±30 min (Delaigue et al. 2026, Sect. 2.5):
 
 ```python
-result = ap.process_float(7902280, ais="AIS/messages-*.gz")           # flag only
-result = ap.process_float(7902280, ais=my_table, ais_action="remove")  # blank flagged values
+result = argopal.process_float(7902280, ais="AIS/messages-*.gz")            # flag only
+result = argopal.process_float(7902280, ais=my_table, ais_action="remove")  # blank flagged values
 ```
 
 Adds `ships_nearby` (vessels counted once per MMSI; NaN when the AIS feed
 received nothing at all in the window) and `ship_flag`.  `ais_radius_km`
-and `ais_window` change the criteria.  Figure: `ap.plot_ais(result["park"])`.
+and `ais_window` change the criteria.  Figure: `argopal.plot_ais(result["park"])`.
 
 **What AIS data is needed.** Vessel positions covering the float's area
 and dates, as any of:
@@ -263,7 +266,7 @@ Hz⁻¹); one column per model:
 
 They need the 8 kHz band (processed by default);
 `process_float(..., wind_models=[...])` picks a subset.  Each function can
-also be called on its own, e.g. `ap.wind_nystuen2015(park["spl_8000Hz"])`.
+also be called on its own, e.g. `argopal.wind_nystuen2015(park["spl_8000Hz"])`.
 
 ## Reference wind, refitting and uncertainty
 
@@ -278,14 +281,14 @@ reference:
 | LION | 2026-02-10 12:00:00 | 42.106 | 4.687 | 12.4 | 0.5 |
 
 ```python
-result = ap.process_float(
+result = argopal.process_float(
     7902280,
     reference="reference_winds.csv",
-    fit_max_distance_km=40,       # radius for fitting, skill and uncertainty
+    fit_max_distance_km=40,  # radius for fitting, skill and uncertainty
 )
-result["wind_fits"]          # published vs refitted coefficients, RMSE, R², bias
-result["wind_skill"]         # skill against all references, and each one
-result["wind_uncertainty"]   # cross-validated σ by wind-speed bin
+result["wind_fits"]         # published vs refitted coefficients, RMSE, R², bias
+result["wind_skill"]        # skill against all references, and each one
+result["wind_uncertainty"]  # cross-validated σ by wind-speed bin
 ```
 
 Columns are recognised by name: time (`datetime`, `time`, `date`, …), wind
@@ -334,8 +337,8 @@ With AIS as well, the second ship-noise criterion of the paper is applied
 (`flag_ship_deviation`): a measurement is `ship_contaminated` when a ship
 is nearby **and** the refitted Nystuen wind differs from the buoy by more
 than the RMSE of uncontaminated measurements; `ais_action="remove"` then
-blanks only those.  Figures: `ap.plot_wind` (published and refitted, ±1σ,
-with the buoy) and `ap.plot_wind_fit` (float vs buoy, coloured by
+blanks only those.  Figures: `argopal.plot_wind` (published and refitted, ±1σ,
+with the buoy) and `argopal.plot_wind_fit` (float vs buoy, coloured by
 distance).
 
 ## Figures: follow each step
@@ -344,18 +347,18 @@ Every step has a figure showing what it did (before → after, which data
 were used).  Each function returns `(fig, axes)`:
 
 ```python
-figs = ap.plot_all(result, save_dir="figures")  # all of them, saved at 300 dpi
-ap.save_figure(figs["beta"], "beta.png")        # one figure, 300 dpi
-ap.plot_all(result, annotate=True)              # + titles and notes (mode, what was skipped)
+figs = argopal.plot_all(result, save_dir="figures")  # all of them, saved at 300 dpi
+argopal.save_figure(figs["beta"], "beta.png")        # one figure, 300 dpi
+argopal.plot_all(result, annotate=True)              # + titles and notes (mode, what was skipped)
 
-ap.plot_pal_spectra(result["park"])             # band levels + median spectrum
-ap.plot_despike(result["pal_raw"], result["park"], band=8000, cycle=3)
-ap.plot_park(result["park"], result["park_samples"], cycle=3)
-ap.plot_positions(result["park"], result["positions"])
-ap.plot_profiles(result["ts_profiles"])          # T/S profiles used for β
-ap.plot_beta(result["beta"], band=8000)          # β vs depth, β through time
-ap.plot_depth_correction(result["park"], beta=result["beta"])
-ap.plot_wind(result["park"])                   # wind speed, each model
+argopal.plot_pal_spectra(result["park"])  # band levels + median spectrum
+argopal.plot_despike(result["pal_raw"], result["park"], band=8000, cycle=3)
+argopal.plot_park(result["park"], result["park_samples"], cycle=3)
+argopal.plot_positions(result["park"], result["positions"])
+argopal.plot_profiles(result["ts_profiles"])  # T/S profiles used for β
+argopal.plot_beta(result["beta"], band=8000)  # β vs depth, β through time
+argopal.plot_depth_correction(result["park"], beta=result["beta"])
+argopal.plot_wind(result["park"])  # wind speed, each model
 ```
 
 | step | figure |
@@ -373,7 +376,7 @@ Examples for float 7902280 (default settings: delayed mode, 8 kHz) are in `docs/
 ## Find current version
 
 ```python
-ap.hello()
+argopal.hello()
 ```
 
 ## Tests

@@ -6,7 +6,7 @@ import os
 import numpy as np
 import pytest
 
-import argopal as ap
+import argopal
 
 
 DATA = os.path.join(os.path.dirname(__file__), "data")
@@ -27,11 +27,11 @@ DM = ["R", "A", "D", "D"]
 
 
 def _select(mode):
-    return ap.select_mode(RAW, ADJ, RAW_QC, ADJ_QC, DM, mode)
+    return argopal.select_mode(RAW, ADJ, RAW_QC, ADJ_QC, DM, mode)
 
 
 def test_default_mode_is_delayed():
-    assert ap.DEFAULT_MODE == "delayed"
+    assert argopal.DEFAULT_MODE == "delayed"
 
 
 def test_delayed_uses_only_D_and_never_falls_back():
@@ -56,7 +56,7 @@ def test_raw_uses_raw_everywhere():
 
 
 def test_no_best_mode():
-    assert ap.MODES == ("delayed", "adjusted", "raw")
+    assert argopal.MODES == ("delayed", "adjusted", "raw")
     with pytest.raises(ValueError):
         _select("best")
 
@@ -70,7 +70,7 @@ def test_unknown_mode():
 
 
 def test_profiles_default_is_delayed():
-    prof = ap.read_profiles(SPROF)
+    prof = argopal.read_profiles(SPROF)
     assert prof.attrs["mode"] == "delayed"
     # Only the two delayed-mode profiles survive
     assert sorted(prof["cycle"].unique()) == [1, 2]
@@ -81,7 +81,7 @@ def test_profiles_default_is_delayed():
 
 
 def test_profiles_adjusted_keeps_only_A():
-    prof = ap.read_profiles(SPROF, mode="adjusted")
+    prof = argopal.read_profiles(SPROF, mode="adjusted")
     # T/S of cycles 1-2 are delayed mode, so only cycles 38-39 have T/S;
     # oxygen is in A mode in all four profiles
     assert sorted(prof.dropna(subset=["TEMP"])["cycle"].unique()) == [38, 39]
@@ -91,14 +91,14 @@ def test_profiles_adjusted_keeps_only_A():
 
 
 def test_profiles_raw_has_everything():
-    prof = ap.read_profiles(SPROF, mode="raw")
+    prof = argopal.read_profiles(SPROF, mode="raw")
     for var in ["TEMP", "PSAL", "DOXY", "PH_IN_SITU_TOTAL"]:
         assert prof[var].notna().any()
         assert set(prof[var + "_data_mode"]) <= {"R", ""}
 
 
 def test_profiles_columns_and_variable_selection():
-    prof = ap.read_profiles(SPROF, mode="raw", variables=["TEMP", "NOPE"])
+    prof = argopal.read_profiles(SPROF, mode="raw", variables=["TEMP", "NOPE"])
     assert prof.attrs["variables"] == ["TEMP"]
     for col in [
         "cycle",
@@ -119,7 +119,7 @@ def test_profiles_columns_and_variable_selection():
 
 
 def test_park_only_park_drift():
-    park = ap.read_park(RTRAJ, mode="raw")
+    park = argopal.read_park(RTRAJ, mode="raw")
     assert set(park["measurement_code"]) == {290}
     assert park["datetime"].is_monotonic_increasing
     # T/S and O2 are measured at different times: rows hold one or other
@@ -128,7 +128,7 @@ def test_park_only_park_drift():
 
 def test_park_default_delayed_is_empty_for_this_float():
     # 7902280's trajectory has no delayed-mode data at all
-    park = ap.read_park(RTRAJ)
+    park = argopal.read_park(RTRAJ)
     for var in park.attrs["variables"]:
         assert park[var].isna().all()
 
@@ -137,7 +137,7 @@ def test_park_default_delayed_is_empty_for_this_float():
 
 
 def test_available_variables():
-    inv = ap.available_variables(
+    inv = argopal.available_variables(
         {"7902280_Sprof.nc": SPROF, "7902280_Rtraj.nc": RTRAJ}
     )
     sprof = inv[inv["file"] == "7902280_Sprof.nc"].set_index("variable")

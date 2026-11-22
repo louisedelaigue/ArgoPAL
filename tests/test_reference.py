@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import argopal as ap
+import argopal
 
 from . import float2025 as F
 
@@ -38,7 +38,7 @@ def test_read_reference_recognises_columns():
     df = pd.DataFrame(
         {"Time": [T0], "ff": [7.5], "Lat": [43.38], "Lon": [7.83]}
     )
-    ref = ap.read_reference(df)
+    ref = argopal.read_reference(df)
     assert list(ref.columns) == [
         "datetime",
         "wind_speed",
@@ -50,10 +50,10 @@ def test_read_reference_recognises_columns():
 
 def test_read_reference_fixed_station_and_errors():
     df = pd.DataFrame({"datetime": [T0], "wind_speed": [5.0]})
-    ref = ap.read_reference(df, latitude=43.38, longitude=7.83)
+    ref = argopal.read_reference(df, latitude=43.38, longitude=7.83)
     assert ref["latitude"].iloc[0] == 43.38
     with pytest.raises(ValueError, match="latitude"):
-        ap.read_reference(df)
+        argopal.read_reference(df)
 
 
 def test_collocate_table_nearest_in_time_within_tolerance():
@@ -72,7 +72,7 @@ def test_collocate_table_nearest_in_time_within_tolerance():
             T0 + pd.Timedelta("3h"),
         ]
     )
-    out = ap.collocate_reference(pal, ref, name="buoy")
+    out = argopal.collocate_reference(pal, ref, name="buoy")
     np.testing.assert_allclose(out["U_buoy"], [5.0, 9.0, np.nan])
     np.testing.assert_allclose(out["buoy_dt_min"], [-10.0, 10.0, np.nan])
     assert out["buoy_distance_km"].iloc[0] == pytest.approx(0, abs=1e-6)
@@ -88,7 +88,9 @@ def test_collocate_max_distance():
         }
     )
     far = _pal([T0], lat=43.38 + 50 / 111.2)  # 50 km north
-    out = ap.collocate_reference(far, ref, name="buoy", max_distance_km=40)
+    out = argopal.collocate_reference(
+        far, ref, name="buoy", max_distance_km=40
+    )
     assert np.isnan(out["U_buoy"].iloc[0])
     assert out["buoy_distance_km"].iloc[0] == pytest.approx(50, rel=0.01)
 
@@ -105,9 +107,9 @@ def test_collocate_refuses_name_clash_and_needs_positions():
     pal = _pal([T0])
     pal.attrs["wind_models"] = {"applied": {"nystuen2015": {}}}
     with pytest.raises(ValueError, match="already exists"):
-        ap.collocate_reference(pal, ref, name="nystuen2015")
+        argopal.collocate_reference(pal, ref, name="nystuen2015")
     with pytest.raises(KeyError, match="attach_positions"):
-        ap.collocate_reference(pal.drop(columns="latitude"), ref)
+        argopal.collocate_reference(pal.drop(columns="latitude"), ref)
 
 
 def _several_references():
@@ -139,7 +141,7 @@ def _several_references():
 
 
 def test_read_reference_optional_columns():
-    ref = ap.read_reference(_several_references())
+    ref = argopal.read_reference(_several_references())
     assert list(ref.columns) == [
         "datetime",
         "wind_speed",
@@ -151,7 +153,7 @@ def test_read_reference_optional_columns():
     alias = _several_references().rename(
         columns={"reference_name": "station", "wind_speed_sigma": "sigma"}
     )
-    assert set(ap.read_reference(alias)["reference_name"]) == {"A", "B"}
+    assert set(argopal.read_reference(alias)["reference_name"]) == {"A", "B"}
 
 
 def test_collocate_several_references_closest_in_distance():
@@ -163,7 +165,7 @@ def test_collocate_several_references_closest_in_distance():
             T0 + pd.Timedelta("6h"),  # neither
         ]
     )
-    out = ap.collocate_reference(pal, _several_references(), name="buoys")
+    out = argopal.collocate_reference(pal, _several_references(), name="buoys")
     np.testing.assert_allclose(out["U_buoys"], [5.0, 5.0, 5.0, np.nan])
     assert list(out["buoys_reference_name"].iloc[:3]) == ["A"] * 3
     assert pd.isna(out["buoys_reference_name"].iloc[3])
@@ -177,7 +179,9 @@ def test_collocate_several_references_closest_in_distance():
         [T0 + pd.Timedelta("10min"), T0 + pd.Timedelta("4h20min")],
         lat=43.38 + 25 / 111.2,
     )
-    out = ap.collocate_reference(north, _several_references(), name="buoys")
+    out = argopal.collocate_reference(
+        north, _several_references(), name="buoys"
+    )
     assert list(out["buoys_reference_name"]) == ["B", "A"]
     np.testing.assert_allclose(out["U_buoys"], [9.0, 5.0])
     np.testing.assert_allclose(out["buoys_distance_km"], [5, 25], rtol=0.02)
@@ -186,7 +190,7 @@ def test_collocate_several_references_closest_in_distance():
 
 def test_collocate_several_references_radius():
     north = _pal([T0], lat=43.38 + 50 / 111.2)  # 20 km from B, 50 from A
-    out = ap.collocate_reference(
+    out = argopal.collocate_reference(
         north, _several_references(), name="buoys", max_distance_km=10
     )
     assert np.isnan(out["U_buoys"].iloc[0])
@@ -201,17 +205,19 @@ def test_uncertainty_uses_table_sigma():
     half = len(pal) // 2
     pal["buoy_reference_name"] = ["A"] * half + ["B"] * (len(pal) - half)
     pal["buoy_sigma"] = [0.3] * half + [0.4] * (len(pal) - half)
-    out, _ = ap.fit_wind_models(pal, max_distance_km=None)
+    out, _ = argopal.fit_wind_models(pal, max_distance_km=None)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        q, _ = ap.wind_uncertainty(out, n_bootstrap=5)
-        given, _ = ap.wind_uncertainty(out, n_bootstrap=5, reference_sigma=1)
+        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+        given, _ = argopal.wind_uncertainty(
+            out, n_bootstrap=5, reference_sigma=1
+        )
     rms = np.sqrt((0.3**2 + 0.4**2) / 2)
     assert q["U_nystuen2015_fit_sigma_ref"].dropna().unique() == (
         pytest.approx(rms)
     )
     assert (given["U_nystuen2015_fit_sigma_ref"].dropna() == 1).all()
-    skill = ap.wind_skill(out, max_distance_km=None, by_reference=True)
+    skill = argopal.wind_skill(out, max_distance_km=None, by_reference=True)
     assert list(skill["reference_name"].unique()) == ["all", "A", "B"]
 
 
@@ -223,7 +229,7 @@ def _ten_minute_float(hours=48, seed=1):
     spl = 45 + 5 * np.sin(np.arange(len(t)) / 20) + rng.normal(0, 1, len(t))
     pal = _pal(t, spl=spl)
     pal["cycle"] = np.repeat(np.arange(1, 9), len(t) // 8)
-    pal = ap.wind_literature(pal)
+    pal = argopal.wind_literature(pal)
     tb = pd.date_range(T0, periods=hours + 1, freq="1h")
     buoy = pd.DataFrame(
         {
@@ -233,13 +239,13 @@ def _ten_minute_float(hours=48, seed=1):
             "longitude": 7.83,
         }
     )
-    return ap.collocate_reference(pal, buoy, name="buoy")
+    return argopal.collocate_reference(pal, buoy, name="buoy")
 
 
 def test_average_to_reference_one_point_per_reference_value():
     pal = _ten_minute_float()
     assert "buoy_time" in pal
-    pts = ap.average_to_reference(pal)
+    pts = argopal.average_to_reference(pal)
     # each hourly value collects the measurements within ±30 min of it
     assert pts["buoy_time"].is_unique
     assert pts["n_measurements"].sum() == pal["U_buoy"].notna().sum()
@@ -248,9 +254,9 @@ def test_average_to_reference_one_point_per_reference_value():
     assert pts["spl_8000Hz"].iloc[5] == pytest.approx(one["spl_8000Hz"].mean())
     # model winds from the averaged level, not averaged winds
     np.testing.assert_allclose(
-        pts["U_nystuen2015"], ap.wind_nystuen2015(pts["spl_8000Hz"])
+        pts["U_nystuen2015"], argopal.wind_nystuen2015(pts["spl_8000Hz"])
     )
-    single = ap.average_to_reference(pal, average=False)
+    single = argopal.average_to_reference(pal, average=False)
     assert len(single) == pal["U_buoy"].notna().sum()
     assert (single["n_measurements"] == 1).all()
 
@@ -260,8 +266,8 @@ def test_average_keeps_references_apart():
         [T0 + pd.Timedelta("10min"), T0 + pd.Timedelta("20min")],
         lat=[43.38, 43.38 + 25 / 111.2],
     )
-    out = ap.collocate_reference(pal, _several_references(), name="buoys")
-    pts = ap.average_to_reference(out, max_distance_km=None)
+    out = argopal.collocate_reference(pal, _several_references(), name="buoys")
+    pts = argopal.average_to_reference(out, max_distance_km=None)
     assert list(pts["buoys_reference_name"]) == ["A", "B"]
 
 
@@ -269,24 +275,24 @@ def test_fit_and_skill_on_averaged_points():
     pal = _ten_minute_float()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # covariance of a synthetic fit
-        out, fits = ap.fit_wind_models(pal)
-    n_hours = len(ap.average_to_reference(pal))
+        out, fits = argopal.fit_wind_models(pal)
+    n_hours = len(argopal.average_to_reference(pal))
     row = fits.set_index("model").loc["nystuen2015"]
     assert row["n"] == n_hours
     assert row["n_measurements"] == pal["U_buoy"].notna().sum()
     assert out["U_nystuen2015_fit"].notna().sum() == len(pal)  # all applied
-    skill = ap.wind_skill(out).set_index("wind")
+    skill = argopal.wind_skill(out).set_index("wind")
     assert skill.loc["U_nystuen2015_fit", "n"] == n_hours
     assert skill.loc["U_nystuen2015_fit", "rmse"] == pytest.approx(
         row["rmse_fitted"]
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        _, single = ap.fit_wind_models(pal, average=False)
+        _, single = argopal.fit_wind_models(pal, average=False)
     assert single["n"].iloc[0] == pal["U_buoy"].notna().sum()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        q, _ = ap.wind_uncertainty(out, n_bootstrap=5)
+        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
     info = q.attrs["wind_uncertainty"]["models"]["nystuen2015"]
     assert info["n_points"] == n_hours
     assert q["U_nystuen2015_fit_sigma"].notna().sum() == len(pal)
@@ -297,7 +303,7 @@ def test_fit_and_skill_on_averaged_points():
 
 def test_wind_metrics():
     ref = np.array([2.0, 4.0, 6.0, 8.0, np.nan])
-    m = ap.wind_metrics(ref + 1, ref)
+    m = argopal.wind_metrics(ref + 1, ref)
     assert m["n"] == 4
     assert m["bias"] == pytest.approx(1.0)
     assert m["rmse"] == pytest.approx(1.0)
@@ -305,7 +311,7 @@ def test_wind_metrics():
     assert m["intercept"] == pytest.approx(1.0)
     assert m["pearson_r2"] == pytest.approx(1.0)
     assert m["r2"] == pytest.approx(1 - 4 / 20)  # biased: R² < r²
-    perfect = ap.wind_metrics(ref, ref)
+    perfect = argopal.wind_metrics(ref, ref)
     assert perfect["rmse"] == 0 and perfect["r2"] == 1
 
 
@@ -317,9 +323,9 @@ def _synthetic_float(n=400, seed=0, true=None):
     rng = np.random.default_rng(seed)
     spl = rng.uniform(35, 60, n)
     true = true or {"a3": 0.0004, "a2": -0.02, "a1": 0.3, "a0": 1.0}
-    u = ap.wind_nystuen2015(spl, **true) + rng.normal(0, 0.2, n)
+    u = argopal.wind_nystuen2015(spl, **true) + rng.normal(0, 0.2, n)
     pal = _pal(pd.date_range(T0, periods=n, freq="5min"), spl=spl)
-    pal["U_nystuen2015"] = ap.wind_nystuen2015(spl)
+    pal["U_nystuen2015"] = argopal.wind_nystuen2015(spl)
     pal["U_buoy"] = u
     pal["buoy_distance_km"] = np.where(np.arange(n) < n // 2, 10.0, 60.0)
     pal.attrs["wind_models"] = {
@@ -331,9 +337,9 @@ def _synthetic_float(n=400, seed=0, true=None):
 
 def test_fit_recovers_known_coefficients():
     pal, true = _synthetic_float()
-    out, fits = ap.fit_wind_models(pal)
+    out, fits = argopal.fit_wind_models(pal)
     got = fits.set_index("model").loc["nystuen2015", "fitted"]
-    pred_true = ap.wind_nystuen2015(pal["spl_8000Hz"], **true)
+    pred_true = argopal.wind_nystuen2015(pal["spl_8000Hz"], **true)
     np.testing.assert_allclose(out["U_nystuen2015_fit"], pred_true, atol=0.1)
     assert set(got) == {"a3", "a2", "a1", "a0"}
     row = fits.iloc[0]
@@ -343,17 +349,17 @@ def test_fit_recovers_known_coefficients():
 
 def test_fit_uses_only_nearby_measurements():
     pal, _ = _synthetic_float()
-    _, fits = ap.fit_wind_models(pal, max_distance_km=40)
+    _, fits = argopal.fit_wind_models(pal, max_distance_km=40)
     assert fits["n"].iloc[0] == 200
-    _, all_ = ap.fit_wind_models(pal, max_distance_km=None)
+    _, all_ = argopal.fit_wind_models(pal, max_distance_km=None)
     assert all_["n"].iloc[0] == 400
     use = np.zeros(len(pal), bool)
     use[:50] = True
-    _, sub = ap.fit_wind_models(pal, use=use)
+    _, sub = argopal.fit_wind_models(pal, use=use)
     assert sub["n"].iloc[0] == 50
     # nothing close enough: the model keeps its row, unfitted
     with pytest.warns(UserWarning, match="too few"):
-        out, none = ap.fit_wind_models(pal, max_distance_km=5)
+        out, none = argopal.fit_wind_models(pal, max_distance_km=5)
     assert none["n"].iloc[0] == 0 and none["fitted"].iloc[0] is None
     assert np.isnan(none["rmse_fitted"].iloc[0])
     assert "U_nystuen2015_fit" not in out
@@ -361,8 +367,8 @@ def test_fit_uses_only_nearby_measurements():
 
 def test_wind_skill_table():
     pal, _ = _synthetic_float()
-    out, _ = ap.fit_wind_models(pal)
-    skill = ap.wind_skill(out)
+    out, _ = argopal.fit_wind_models(pal)
+    skill = argopal.wind_skill(out)
     assert list(skill["wind"]) == ["U_nystuen2015", "U_nystuen2015_fit"]
     assert skill["rmse"].iloc[1] < skill["rmse"].iloc[0]
 
@@ -377,17 +383,19 @@ def test_ship_deviation_needs_both_criteria():
     pal.loc[[0, 1], "U_nystuen2015_fit"] += 5.0  # large error
     pal["ship_flag"] = False
     pal.loc[[0, 2], "ship_flag"] = True  # 0: ship + error; 2: ship only
-    out = ap.flag_ship_deviation(pal, reference="buoy")
+    out = argopal.flag_ship_deviation(pal, reference="buoy")
     # 1 has a large error but no ship: not contaminated
     assert list(np.flatnonzero(out["ship_contaminated"])) == [0]
     assert out.attrs["ais"]["n_contaminated"] == 1
-    rm = ap.flag_ship_deviation(pal, reference="buoy", action="remove")
+    rm = argopal.flag_ship_deviation(pal, reference="buoy", action="remove")
     assert np.isnan(rm.loc[0, "spl_8000Hz"]) and np.isnan(
         rm.loc[0, "U_nystuen2015_fit"]
     )
     assert rm.loc[0, "U_buoy"] == pal.loc[0, "U_buoy"]  # reference kept
     with pytest.raises(KeyError, match="flag_ships"):
-        ap.flag_ship_deviation(pal.drop(columns="ship_flag"), reference="buoy")
+        argopal.flag_ship_deviation(
+            pal.drop(columns="ship_flag"), reference="buoy"
+        )
 
 
 # --- Real data: the 2025 float with DYFAMED -----------------------------------
@@ -398,8 +406,8 @@ def float2025():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         p = F.process(ais=F.AIS_CSV)["park"]
-        p = ap.collocate_reference(p, DYFAMED, name="dyfamed")
-        p, fits = ap.fit_wind_models(p, reference="dyfamed")
+        p = argopal.collocate_reference(p, DYFAMED, name="dyfamed")
+        p, fits = argopal.fit_wind_models(p, reference="dyfamed")
     return p, fits
 
 
@@ -422,7 +430,7 @@ def test_2025_published_coefficients_need_refitting(float2025):
 
 def test_2025_second_ship_criterion(float2025):
     p, _ = float2025
-    out = ap.flag_ship_deviation(p, reference="dyfamed")
+    out = argopal.flag_ship_deviation(p, reference="dyfamed")
     assert out["ship_contaminated"].sum() > 0
     assert (out["ship_contaminated"] <= out["ship_flag"]).all()  # a subset
     assert 0 < out.attrs["ais"]["deviation_rmse"] < 2
@@ -430,9 +438,9 @@ def test_2025_second_ship_criterion(float2025):
 
 def test_2025_figures(float2025):
     p, _ = float2025
-    _, axes = ap.plot_wind(p)
+    _, axes = argopal.plot_wind(p)
     assert len(axes) == 2  # published, refitted
-    _, axes = ap.plot_wind_fit(p)
+    _, axes = argopal.plot_wind_fit(p)
     assert len(axes) == 3
 
 
@@ -456,7 +464,7 @@ def _reference_for(park):
     return pd.DataFrame(
         {
             "datetime": t,
-            "wind_speed": 0.8 * ap.wind_nystuen2015(spl.to_numpy()),
+            "wind_speed": 0.8 * argopal.wind_nystuen2015(spl.to_numpy()),
             "latitude": park["latitude"].iloc[0],
             "longitude": park["longitude"].iloc[0],
         }
@@ -466,23 +474,23 @@ def _reference_for(park):
 def test_pipeline_with_reference(offline):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        base = ap.process_float(7902280, mode="raw")
+        base = argopal.process_float(7902280, mode="raw")
         ref = _reference_for(base["park"])
-        r = ap.process_float(7902280, mode="raw", reference={"buoy": ref})
+        r = argopal.process_float(7902280, mode="raw", reference={"buoy": ref})
     p = r["park"]
     assert {"U_buoy", "U_nystuen2015_fit"} <= set(p.columns)
     assert r["wind_fits"].attrs["reference"] == "buoy"
-    assert "wind_skill" in r and "wind_fit" in ap.plot_all(r)
+    assert "wind_skill" in r and "wind_fit" in argopal.plot_all(r)
     # single source: named "ref"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        single = ap.process_float(7902280, mode="raw", reference=ref)
+        single = argopal.process_float(7902280, mode="raw", reference=ref)
     assert "U_ref" in single["park"]
     assert single["wind_fits"].attrs["average"] is True
     n_avg = single["wind_fits"]["n"].iloc[0]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        every = ap.process_float(
+        every = argopal.process_float(
             7902280, mode="raw", reference=ref, reference_average=False
         )
     assert every["wind_fits"]["n"].iloc[0] > n_avg
@@ -491,7 +499,7 @@ def test_pipeline_with_reference(offline):
 def test_pipeline_with_several_references_in_one_file(offline, tmp_path):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        base = ap.process_float(7902280, mode="raw")
+        base = argopal.process_float(7902280, mode="raw")
     near = _reference_for(base["park"]).assign(
         reference_name="near", wind_speed_sigma=0.5
     )
@@ -504,7 +512,7 @@ def test_pipeline_with_several_references_in_one_file(offline, tmp_path):
     pd.concat([far, near]).to_csv(path, index=False)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        r = ap.process_float(
+        r = argopal.process_float(
             7902280, mode="raw", reference=str(path), n_bootstrap=5
         )
     p = r["park"]
@@ -518,7 +526,7 @@ def test_pipeline_with_several_references_in_one_file(offline, tmp_path):
 def test_pipeline_ais_remove_with_reference_uses_both_criteria(offline):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        base = ap.process_float(7902280, mode="raw")
+        base = argopal.process_float(7902280, mode="raw")
     park = base["park"]
     ref = _reference_for(park)
     t = park["datetime"].min()
@@ -534,7 +542,7 @@ def test_pipeline_ais_remove_with_reference_uses_both_criteria(offline):
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        r = ap.process_float(
+        r = argopal.process_float(
             7902280,
             mode="raw",
             ais=ais,

@@ -18,12 +18,12 @@ two layouts:
 
 | Values | Bands (Hz) | Constant |
 |---|---|---|
-| 23 | 63, 100, 125, 160, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000, 25000 | `ap.PAL_BANDS_HZ` |
-| 9 | 63, 125, 400, 1000, 2000, 5000, 8000, 12500, 20000 | `ap.PAL_BANDS_9_HZ` |
+| 23 | 63, 100, 125, 160, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000, 25000 | `argopal.PAL_BANDS_HZ` |
+| 9 | 63, 125, 400, 1000, 2000, 5000, 8000, 12500, 20000 | `argopal.PAL_BANDS_9_HZ` |
 
 Any other number of values is refused with an error rather than given
 wrong frequencies. Each read also checks that the median spectrum falls
-with frequency, as ambient noise does, and warns (`ap.BandOrderWarning`)
+with frequency, as ambient noise does, and warns (`argopal.BandOrderWarning`)
 if it does not, which would mean the bands are in the wrong order.
 
 ## Band normalisation

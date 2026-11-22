@@ -10,7 +10,7 @@ import os
 import numpy as np
 import pandas as pd
 
-import argopal as ap
+import argopal
 
 
 DATA = os.path.join(os.path.dirname(__file__), "data", "float2025")
@@ -20,7 +20,7 @@ PARK_DEPTHS = {41: 500, 42: 740, 45: 1020}  # approximate, dbar
 
 
 def read_pal():
-    """Like `ap.read_pal`: one row per park-drift spectrum, 23 bands."""
+    """Like `argopal.read_pal`: one row per park-drift spectrum, 23 bands."""
     df = pd.read_csv(
         os.path.join(DATA, "pal.csv.gz"), parse_dates=["datetime"]
     )
@@ -30,13 +30,13 @@ def read_pal():
     df["measurement_code"] = df["measurement_code"].astype("Int64")
     df.attrs = {
         "wmo": None,
-        "bands_hz": list(ap.PAL_BANDS_HZ),
+        "bands_hz": list(argopal.PAL_BANDS_HZ),
         "units": "dB re 1 uPa",
         "band_normalization": False,  # the 2025 firmware sent band levels
         "source_file": "float2025/pal.csv.gz",
     }
-    df.attrs["band_order_score"] = ap.check_band_order(df)
-    df.attrs["band_layout_counts"] = ap.check_band_layout(df)
+    df.attrs["band_order_score"] = argopal.check_band_order(df)
+    df.attrs["band_layout_counts"] = argopal.check_band_layout(df)
     return df
 
 
@@ -47,7 +47,7 @@ def _ctd():
 
 
 def read_park():
-    """Like `ap.read_park(mode="raw")`: park-drift CTD samples."""
+    """Like `argopal.read_park(mode="raw")`: park-drift CTD samples."""
     c = _ctd()
     c = c[c["phase"] == "PAR"]
     df = pd.DataFrame(
@@ -73,7 +73,7 @@ def read_park():
 
 
 def read_positions():
-    """Like `ap.read_positions`: surface GPS fixes."""
+    """Like `argopal.read_positions`: surface GPS fixes."""
     p = pd.read_csv(
         os.path.join(DATA, "positions.csv"), parse_dates=["datetime"]
     )
@@ -92,7 +92,7 @@ def read_positions():
 
 
 def read_profiles():
-    """Like `ap.read_profiles(mode="raw")`: ascent T/S profiles, each at
+    """Like `argopal.read_profiles(mode="raw")`: ascent T/S profiles, each at
     the GPS fix that ended it."""
     c = _ctd()
     c = c[c["phase"] == "ASC"].dropna(subset=["pressure"])
@@ -129,21 +129,23 @@ def process(bands=(8000,), ais=None, ais_action="flag"):
     """Run argopal's steps 2-8 on the 2025 float, as `process_float` would
     after downloading."""
     pal_raw = read_pal()
-    pal = ap.clean_pal(ap.select_bands(pal_raw, bands))
+    pal = argopal.clean_pal(argopal.select_bands(pal_raw, bands))
     park = read_park()
-    pal = ap.attach_park(pal, park)
+    pal = argopal.attach_park(pal, park)
     positions = read_positions()
-    pal = ap.attach_positions(pal, positions)
+    pal = argopal.attach_positions(pal, positions)
     ais_positions = None
     if ais is not None:
-        ais_positions = ap.read_ais(ais, bbox=ap.track_bbox(pal, 20))
-        pal = ap.flag_ships(pal, ais_positions, action=ais_action)
+        ais_positions = argopal.read_ais(ais, bbox=argopal.track_bbox(pal, 20))
+        pal = argopal.flag_ships(pal, ais_positions, action=ais_action)
     profiles = read_profiles()
-    ts = ap.gridded_profiles(profiles, max_pressure=pal["pressure"].max() + 10)
-    beta = ap.compute_profile_betas(ts, pal.attrs["bands_hz"])
-    pal = ap.depth_correct(pal, beta)
-    pal = ap.spectral_level(pal)
-    pal = ap.wind_literature(pal)
+    ts = argopal.gridded_profiles(
+        profiles, max_pressure=pal["pressure"].max() + 10
+    )
+    beta = argopal.compute_profile_betas(ts, pal.attrs["bands_hz"])
+    pal = argopal.depth_correct(pal, beta)
+    pal = argopal.spectral_level(pal)
+    pal = argopal.wind_literature(pal)
     out = {
         "park": pal,
         "pal_raw": pal_raw,

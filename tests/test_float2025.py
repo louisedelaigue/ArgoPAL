@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import argopal as ap
+import argopal
 
 from . import float2025 as F
 
@@ -38,22 +38,22 @@ def test_full_23_band_spectra():
         "other": 0,
     }
     assert pal.attrs["band_order_score"] < -0.95
-    assert ap.available_bands(pal) == list(ap.PAL_BANDS_HZ)
+    assert argopal.available_bands(pal) == list(argopal.PAL_BANDS_HZ)
 
 
 def test_3150_hz_is_kept_when_the_float_sends_it():
     with warnings.catch_warnings():
-        warnings.simplefilter("error", ap.BandCoverageWarning)
-        sel = ap.select_bands(F.read_pal(), bands=(3150, 8000))
+        warnings.simplefilter("error", argopal.BandCoverageWarning)
+        sel = argopal.select_bands(F.read_pal(), bands=(3150, 8000))
     assert sel.attrs["bands_hz"] == [3150, 8000]
     assert sel.attrs["bands_dropped"] == []
 
 
 def test_despike_on_real_spectra_matches_reference():
-    pal = ap.select_bands(F.read_pal(), bands=(8000,))
+    pal = argopal.select_bands(F.read_pal(), bands=(8000,))
     pal = pal[pal["cycle"] == 41].reset_index(drop=True)
     pal.attrs = {**pal.attrs, "bands_hz": [8000]}
-    fast = ap.despike(pal)
+    fast = argopal.despike(pal)
     ref = []
     for t in pal["datetime"]:
         w = pal.loc[
@@ -79,7 +79,7 @@ def test_bandwidth_is_subtracted_for_band_levels(result):
             - park[f"beta_{band}Hz"]
         )
         np.testing.assert_allclose(
-            term, -10 * np.log10(ap.third_octave_bandwidth(band))
+            term, -10 * np.log10(argopal.third_octave_bandwidth(band))
         )
         # paper code used 10 log10 of the base-2 nominal bandwidth: 0.03-0.05 dB apart
         assert term.median() == pytest.approx(paper, abs=0.06)
@@ -168,7 +168,7 @@ def test_literature_winds(result):
 
 
 def test_figures(result):
-    figs = ap.plot_all(result)
+    figs = argopal.plot_all(result)
     assert {"ais", "wind", "beta", "profiles"} <= set(figs)
 
 
@@ -178,7 +178,7 @@ def test_figures(result):
 def test_ais_times_are_receiver_times_not_file_dates():
     # The positions come from files named ..0215, ..0216, ..0217, but each
     # daily file mostly holds the day before: times must follow the receiver.
-    ais = ap.read_ais(F.AIS_CSV)
+    ais = argopal.read_ais(F.AIS_CSV)
     assert ais["datetime"].min() >= pd.Timestamp("2025-02-14 12:30")
     assert ais["datetime"].max() <= pd.Timestamp("2025-02-16 02:15")
     assert (ais["datetime"].dt.day == 14).any()
@@ -195,8 +195,8 @@ def test_ais_csv_and_raw_nmea_agree():
         lat0 - km / 111.2,
         lat0 + km / 111.2,
     )
-    csv = ap.read_ais(F.AIS_CSV, bbox=box)
-    nmea = ap.read_ais(F.AIS_NMEA, bbox=box)
+    csv = argopal.read_ais(F.AIS_CSV, bbox=box)
+    nmea = argopal.read_ais(F.AIS_NMEA, bbox=box)
     assert len(csv) > 10_000
     key = ["datetime", "mmsi"]
     a = csv.assign(
@@ -226,7 +226,7 @@ def test_base_station_in_raw_nmea_is_not_a_ship():
         if m.decode().msg_type == 4
     }
     assert len(base) == 1
-    assert not base & set(ap.read_ais(F.AIS_NMEA)["mmsi"])
+    assert not base & set(argopal.read_ais(F.AIS_NMEA)["mmsi"])
     assert pyais  # used
 
 

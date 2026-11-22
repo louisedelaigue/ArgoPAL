@@ -1,6 +1,6 @@
 """Build examples/argopal_tutorial.ipynb (run, then execute the notebook).
 
-    python examples/make_tutorial.py
+python examples/make_tutorial.py
 """
 
 import os
@@ -51,10 +51,10 @@ pip install "argopal[ais] @ git+https://github.com/louisedelaigue/ArgoPAL.git"  
 code("""
 import warnings
 
-import argopal as ap
+import argopal
 
 warnings.simplefilter("ignore")  # ArgoPAL warnings are discussed in the text
-ap.hello()
+argopal.hello()
 """)
 
 md("""
@@ -67,7 +67,7 @@ band, β per profile, despiking over ±1.5 h at the 95th percentile.
 """)
 
 code("""
-result = ap.process_float(7902280, verbose=False)
+result = argopal.process_float(7902280, verbose=False)
 list(result)
 """)
 
@@ -106,7 +106,7 @@ The variables available in each file, with how many values are in delayed
 """)
 
 code("""
-ap.available_variables("argopal_data/7902280")
+argopal.available_variables("argopal_data/7902280")
 """)
 
 md("""
@@ -128,7 +128,7 @@ Almost all spectra are 9-band spectra (63, 125, 400 Hz, 1, 2, 5, 8, 12.5,
 """)
 
 code("""
-fig, axes = ap.plot_pal_spectra(result["pal_raw"])
+fig, axes = argopal.plot_pal_spectra(result["pal_raw"])
 """)
 
 md("""
@@ -145,7 +145,7 @@ md("""
 code("""
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
-    raw = ap.process_float(7902280, mode="raw", bands=(3150, 8000), verbose=False)
+    raw = argopal.process_float(7902280, mode="raw", bands=(3150, 8000), verbose=False)
 print([str(w.message)[:110] for w in caught if "band" in str(w.message)])
 print("bands processed:", raw["park"].attrs["bands_hz"])
 print(f"depth-corrected in raw mode: {raw['park']['spl_8000Hz'].notna().mean():.0%}")
@@ -159,23 +159,23 @@ inspected, changed or exported between steps.
 """)
 
 code("""
-files = ap.download_aux(7902280, verbose=False) | ap.download_core(7902280, verbose=False)
+files = argopal.download_aux(7902280, verbose=False) | argopal.download_core(7902280, verbose=False)
 
-meta = ap.read_pal_meta(files["7902280_meta_aux.nc"])
-pal = ap.read_pal(files["7902280_Rtraj_aux.nc"], meta=meta)           # spectra
-pal = ap.select_bands(pal, bands=8000)                                # 8 kHz
-pal = ap.clean_pal(pal)                                               # park drift, QC, despike
+meta = argopal.read_pal_meta(files["7902280_meta_aux.nc"])
+pal = argopal.read_pal(files["7902280_Rtraj_aux.nc"], meta=meta)           # spectra
+pal = argopal.select_bands(pal, bands=8000)                                # 8 kHz
+pal = argopal.clean_pal(pal)                                               # park drift, QC, despike
 
-park_samples = ap.read_park(files["7902280_Rtraj.nc"], mode="raw")    # park CTD/BGC
-pal = ap.attach_park(pal, park_samples)                               # linear in time
-pal = ap.attach_positions(pal, ap.read_positions(files["7902280_Rtraj.nc"]))
+park_samples = argopal.read_park(files["7902280_Rtraj.nc"], mode="raw")    # park CTD/BGC
+pal = argopal.attach_park(pal, park_samples)                               # linear in time
+pal = argopal.attach_positions(pal, argopal.read_positions(files["7902280_Rtraj.nc"]))
 
-profiles = ap.read_profiles(files["7902280_Sprof.nc"], mode="raw")
-ts = ap.gridded_profiles(profiles, max_pressure=pal["pressure"].max() + 10)
-beta = ap.compute_profile_betas(ts, pal.attrs["bands_hz"])           # β per profile
-pal = ap.depth_correct(pal, beta)                                     # β in time and depth
-pal = ap.spectral_level(pal)                                          # dB re 1 µPa² Hz⁻¹
-pal = ap.wind_literature(pal)                                         # published models
+profiles = argopal.read_profiles(files["7902280_Sprof.nc"], mode="raw")
+ts = argopal.gridded_profiles(profiles, max_pressure=pal["pressure"].max() + 10)
+beta = argopal.compute_profile_betas(ts, pal.attrs["bands_hz"])           # β per profile
+pal = argopal.depth_correct(pal, beta)                                     # β in time and depth
+pal = argopal.spectral_level(pal)                                          # dB re 1 µPa² Hz⁻¹
+pal = argopal.wind_literature(pal)                                         # published models
 
 pal[["datetime", "pressure", "f_8000Hz", "beta_8000Hz", "spl_8000Hz",
      "U_vagle1990", "U_nystuen2015", "U_pensieri2015"]].dropna().head()
@@ -185,16 +185,16 @@ md("""
 ## 5. Figures
 
 One figure per step, in the style of Delaigue et al. (2026).
-`ap.plot_all(result, save_dir="figures")` saves all of them at 300 dpi;
+`argopal.plot_all(result, save_dir="figures")` saves all of them at 300 dpi;
 here a few, on the raw-mode run.
 """)
 
 code("""
-fig, axes = ap.plot_despike(raw["pal_raw"], raw["park"], cycle=10)
+fig, axes = argopal.plot_despike(raw["pal_raw"], raw["park"], cycle=10)
 """)
 
 code("""
-fig, axes = ap.plot_profiles(raw["ts_profiles"])
+fig, axes = argopal.plot_profiles(raw["ts_profiles"])
 """)
 
 md("""
@@ -203,11 +203,11 @@ profile and so the propagation of surface noise down to the hydrophone.
 """)
 
 code("""
-fig, axes = ap.plot_beta(raw["beta"])
+fig, axes = argopal.plot_beta(raw["beta"])
 """)
 
 code("""
-fig, axes = ap.plot_depth_correction(raw["park"], beta=raw["beta"])
+fig, axes = argopal.plot_depth_correction(raw["park"], beta=raw["beta"])
 """)
 
 md("""
@@ -215,11 +215,11 @@ md("""
 
 Vagle et al. (1990), Nystuen et al. (2015) and Pensieri et al. (2015), all at
 8 kHz, with their published coefficients (`U_<model>` columns).  Each is also
-a function: e.g. `ap.wind_nystuen2015(spl)`.
+a function: e.g. `argopal.wind_nystuen2015(spl)`.
 """)
 
 code("""
-fig, axes = ap.plot_wind(raw["park"])
+fig, axes = argopal.plot_wind(raw["park"])
 """)
 
 md("""
@@ -254,7 +254,7 @@ error for all of them is passed as `reference_sigma`.
 """)
 
 code("""
-cal = ap.process_float(
+cal = argopal.process_float(
     7902280,
     mode="raw",
     reference={"buoys": "data/reference_winds_2026.csv"},
@@ -329,7 +329,7 @@ for fitting:
 """)
 
 code("""
-fig, axes = ap.plot_wind_fit(cal["park"])
+fig, axes = argopal.plot_wind_fit(cal["park"])
 """)
 
 md("""
@@ -337,11 +337,11 @@ Restricted to the 40 km used for fitting, the statistics match `wind_fits`:
 """)
 
 code("""
-fig, axes = ap.plot_wind_fit(cal["park"], max_distance_km=40)
+fig, axes = argopal.plot_wind_fit(cal["park"], max_distance_km=40)
 """)
 
 code("""
-fig, axes = ap.plot_wind(cal["park"])
+fig, axes = argopal.plot_wind(cal["park"])
 """)
 
 md("""
@@ -356,11 +356,11 @@ measurement must be to its reference to be used; `None` uses all.
 """)
 
 code("""
-park = ap.collocate_reference(raw["park"], buoys, name="buoys")
+park = argopal.collocate_reference(raw["park"], buoys, name="buoys")
 for radius in (10, 25, 40, 80):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        _, fits = ap.fit_wind_models(park, max_distance_km=radius)
+        _, fits = argopal.fit_wind_models(park, max_distance_km=radius)
     row = fits.set_index("model").loc["nystuen2015"]
     print(f"{radius:>3} km: n = {row['n']:>6}, RMSE = {row['rmse_fitted']:.2f}, "
           f"R² = {row['r2_fitted']:.2f}")
@@ -391,7 +391,7 @@ choose).
 """)
 
 code("""
-strict = ap.collocate_reference(
+strict = argopal.collocate_reference(
     raw["park"], buoys, name="buoys", max_time="30min", max_distance_km=40
 )
 print(f"{strict['U_buoys'].notna().sum()} measurements with a buoy wind "
@@ -404,8 +404,8 @@ buoy to the skill table:
 """)
 
 code("""
-fitted, _ = ap.fit_wind_models(park, max_distance_km=40)
-skill = ap.wind_skill(fitted, max_distance_km=40, by_reference=True)
+fitted, _ = argopal.fit_wind_models(park, max_distance_km=40)
+skill = argopal.wind_skill(fitted, max_distance_km=40, by_reference=True)
 skill[skill["wind"] == "U_nystuen2015_fit"].round(2)
 """)
 
@@ -422,9 +422,9 @@ illustrative = buoys.assign(
         {"DYFAMED": 0.5, "LION": 0.5, "PACA": 0.8}
     )
 )
-p = ap.collocate_reference(raw["park"], illustrative, name="buoys")
-p, _ = ap.fit_wind_models(p, models=["nystuen2015"])
-p, _ = ap.wind_uncertainty(p, n_bootstrap=20)
+p = argopal.collocate_reference(raw["park"], illustrative, name="buoys")
+p, _ = argopal.fit_wind_models(p, models=["nystuen2015"])
+p, _ = argopal.wind_uncertainty(p, n_bootstrap=20)
 print("σ_ref from the table:", round(p.attrs["wind_uncertainty"]["models"]
                                     ["nystuen2015"]["sigma_ref"], 2))
 """)
@@ -434,9 +434,9 @@ md("""
 
 - Column names are recognised from common aliases (`time`, `ff`, `u10`,
   `lat`, `lon`, `station`, `buoy_name`, `sigma`, ...); see
-  `ap.read_reference`.
+  `argopal.read_reference`.
 - A single fixed buoy whose table has no position columns:
-  `ap.collocate_reference(park, "buoy.csv", latitude=43.36, longitude=7.84)`.
+  `argopal.collocate_reference(park, "buoy.csv", latitude=43.36, longitude=7.84)`.
 - Moving references (ships, drifters): positions are read for every value.
 - A dict collocates several sources separately, each under its own name:
   `reference={"dyfamed": "dyfamed.csv", "paca": "paca.csv"}`, with
@@ -459,13 +459,13 @@ files, or raw NMEA files with tag-block receiver times (needs
 `pip install argopal[ais]`):
 
 ```python
-res = ap.process_float(
+res = argopal.process_float(
     7902280,
     ais="AIS/messages-*.gz",          # or a DataFrame / CSV files
     reference="reference_winds.csv",
     ais_action="remove",
 )
-fig, axes = ap.plot_ais(res["park"])
+fig, axes = argopal.plot_ais(res["park"])
 ```
 """)
 
@@ -476,23 +476,27 @@ Any table, or any set of tables, at any stage, as CSV or NetCDF:
 """)
 
 code("""
-ap.export(cal, "output/wmo7902280", format="csv")
+argopal.export(cal, "output/wmo7902280", format="csv")
 """)
 
 code("""
-files = ap.export(cal, "output/wmo7902280.nc", format="netcdf")
-back = ap.read_export(files[0])
+files = argopal.export(cal, "output/wmo7902280.nc", format="netcdf")
+back = argopal.read_export(files[0])
 list(back), back["park"].shape
 """)
 
 code("""
-ap.export(pal, "output/pal_step_by_step.csv")   # a single intermediate table
+argopal.export(pal, "output/pal_step_by_step.csv")   # a single intermediate table
 """)
 
 nb = nbf.v4.new_notebook()
 nb["cells"] = cells
 nb["metadata"] = {
-    "kernelspec": {"name": "python3", "display_name": "Python 3", "language": "python"},
+    "kernelspec": {
+        "name": "python3",
+        "display_name": "Python 3",
+        "language": "python",
+    },
     "language_info": {"name": "python"},
 }
 nbf.write(nb, os.path.join(HERE, "argopal_tutorial.ipynb"))
