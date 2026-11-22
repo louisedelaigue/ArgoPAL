@@ -1,0 +1,57 @@
+[build-system]
+requires = [
+    "setuptools",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "argopal"
+description = "Wind from passive acoustics on BGC-Argo floats"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers =[
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+    "Natural Language :: English",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Oceanography",
+]
+dependencies = [
+    "gsw",
+    "matplotlib",
+    "netCDF4",
+    "numpy",
+    "pandas",
+    "scipy",
+    "xarray",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+ais = ["pyais"]
+
+[tool.setuptools.packages.find]
+include = ["argopal*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "argopal.meta.__version__"}
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-single-line = false
+lines-after-imports = 2
+
+[dependency-groups]
+dev = [
+    "ipykernel",
+    "pytest",
+]

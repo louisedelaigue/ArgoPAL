@@ -1,0 +1,30 @@
+site_name: argopal
+site_author: Louise Delaigue
+site_description: Wind from passive acoustics on BGC-Argo floats
+copyright: Copyright &copy; 2026  L. Delaigue  (GNU GPLv3)
+
+nav:
+  - Overview & installation: index.md
+
+theme:
+  name: material
+  language: en
+  palette:
+    scheme: default
+    primary: black
+    accent: deep orange
+  font:
+    text: Roboto Slab
+    code: Roboto Mono
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.details
+  - codehilite:
+      guess_lang: false
+  - toc:
+      permalink: true
+  - footnotes
+  - pymdownx.inlinehilite
+  - pymdownx.arithmatex
