@@ -1,5 +1,7 @@
 """The ArgoPAL processing pipeline, from a WMO number."""
 
+import xarray as xr
+
 from .ais import flag_ships, read_ais, track_bbox
 from .argo import DEFAULT_MODE, read_park, read_profiles
 from .calibration import (
@@ -20,6 +22,7 @@ from .correction import (
     mean_profile,
     spectral_level,
 )
+from .footprint import wind_footprints
 from .gdac import download_aux, download_core, find_dac
 from .positions import attach_positions, read_positions
 from .read import read_pal, read_pal_meta
@@ -48,6 +51,9 @@ def process_float(
     reference=None,
     reference_max_time="1h",
     reference_height_m=None,
+    footprints=None,
+    footprint_min_r=0.9,
+    footprint_anomaly=None,
     fit_reference=None,
     fit_max_distance_km=40.0,
     reference_average=True,
@@ -166,6 +172,20 @@ def process_float(
         height they are assumed to be 10 m already (with a warning).
     fit_reference : str, optional
         Reference used to refit the models; by default the first one.
+    footprints : str, xr.Dataset or xr.DataArray, optional
+        Select the measurements compared with each reference by wind
+        footprint instead of distance: a reanalysis wind (file(s) or
+        dataset, e.g. ERA5 "u10"/"v10", over the float's area and period)
+        from which `wind_footprints` are computed, or footprints already
+        computed.  Each measurement is matched to the reference whose
+        footprint has the highest R at its position, and fitting, skill
+        and uncertainty use the measurements where that R is at least
+        `footprint_min_r`; `fit_max_distance_km` is then not used.
+    footprint_min_r : float, optional
+        Correlation defining a footprint, by default 0.9.
+    footprint_anomaly : {None, "monthly"}, optional
+        Correlate the reanalysis wind as it is (default) or as monthly
+        anomalies; see `wind_footprints`.
     fit_max_distance_km : float, optional
         Measurements used for fitting, skill and uncertainty must be this
         close to the reference they are matched to, by default 40 km;
@@ -287,21 +307,35 @@ def process_float(
                 opts = {k: v for k, v in source.items() if k != "source"}
                 source = source["source"]
             opts.setdefault("height_m", reference_height_m)
+            if footprints is not None:
+                fp = footprints
+                if not (
+                    isinstance(fp, xr.DataArray) and fp.name == "footprint_r"
+                ):
+                    fp = wind_footprints(
+                        footprints, source, anomaly=footprint_anomaly
+                    )
+                opts.setdefault("footprints", fp)
+                extra.setdefault("footprints", fp)
             pal = collocate_reference(
                 pal, source, name=name, max_time=reference_max_time, **opts
             )
         fit_ref = fit_reference or next(iter(refs))
+        by_footprint = footprints is not None
+        max_km = None if by_footprint else fit_max_distance_km
+        min_r = footprint_min_r if by_footprint else None
         pal, extra["wind_fits"] = fit_wind_models(
             pal,
             reference=fit_ref,
-            max_distance_km=fit_max_distance_km,
+            max_distance_km=max_km,
             average=reference_average,
             window=reference_window,
+            min_footprint_r=min_r,
         )
         extra["wind_skill"] = wind_skill(
             pal,
             reference=fit_ref,
-            max_distance_km=fit_max_distance_km,
+            max_distance_km=max_km,
             by_reference=True,
         )
         pal, extra["wind_uncertainty"] = wind_uncertainty(
@@ -311,7 +345,7 @@ def process_float(
             pal = flag_ship_deviation(
                 pal,
                 reference=fit_ref,
-                max_distance_km=fit_max_distance_km,
+                max_distance_km=max_km,
                 action=ais_action,
             )
 

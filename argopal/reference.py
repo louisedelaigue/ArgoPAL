@@ -263,6 +263,7 @@ def collocate_reference(
     longitude=None,
     height_m=None,
     height_method="log",
+    footprints=None,
 ):
     """Add a reference wind (at 10 m) to each PAL measurement.
 
@@ -297,6 +298,12 @@ def collocate_reference(
         converted to 10 m.  See `read_reference`.
     height_method : {"log", "power"}, optional
         Profile used for the conversion (`wind_to_10m`), by default "log".
+    footprints : xr.DataArray, optional
+        Wind footprints of the references (`wind_footprints`).  Each
+        measurement is then matched to the reference whose footprint has
+        the highest R at the float's position (the closest if equal),
+        rather than to the closest reference, and that R is recorded
+        ("<name>_footprint_r") for selecting by footprint when fitting.
 
     Returns
     -------
@@ -345,6 +352,19 @@ def collocate_reference(
     best_t = np.full(n, np.datetime64("NaT", "ns"))
     best_lat = np.full(n, np.nan)
     best_lon = np.full(n, np.nan)
+    best_r = np.full(n, -np.inf)
+    if footprints is not None:
+        from .footprint import footprint_r_at
+
+        fp_r = footprint_r_at(footprints, lat, lon)
+        if not named and len(fp_r.columns) == 1:  # one unnamed reference
+            fp_r.columns = [None]
+        missing = [str(r) for r, _ in groups if r not in fp_r.columns]
+        if missing:
+            raise ValueError(
+                "No footprint for " + ", ".join(missing) + ": compute "
+                "wind_footprints with the same references."
+            )
     best_u = np.full(n, np.nan)
     best_sigma = np.full(n, np.nan)
     best_name = np.full(n, None, dtype=object)
@@ -362,10 +382,15 @@ def collocate_reference(
         rlon = g["longitude"].to_numpy(float)[it]
         dist = _haversine_km(lat, lon, rlat, rlon)
         ok = np.abs(dt) <= tol_min
-        closer = ok & (
-            (dist < best_dist)
-            | ((dist == best_dist) & (np.abs(dt) < np.abs(best_dt)))
-        )
+        if footprints is not None:
+            r = np.nan_to_num(fp_r[ref_name].to_numpy(float), nan=-np.inf)
+            closer = ok & ((r > best_r) | ((r == best_r) & (dist < best_dist)))
+            best_r = np.where(closer, r, best_r)
+        else:
+            closer = ok & (
+                (dist < best_dist)
+                | ((dist == best_dist) & (np.abs(dt) < np.abs(best_dt)))
+            )
         best_dist = np.where(closer, dist, best_dist)
         best_dt = np.where(closer, dt, best_dt)
         best_t = np.where(closer, tr[it], best_t)
@@ -388,6 +413,10 @@ def collocate_reference(
     out[f"{name}_time"] = best_t
     out[f"{name}_latitude"] = best_lat
     out[f"{name}_longitude"] = best_lon
+    if footprints is not None:
+        out[f"{name}_footprint_r"] = np.where(
+            np.isfinite(best_r), best_r, np.nan
+        )
     if named:
         out[f"{name}_reference_name"] = best_name
     if has_sigma:
@@ -401,7 +430,10 @@ def collocate_reference(
         "max_distance_km": max_distance_km,
         "n_matched": int(matched.sum()),
         "height": ref.attrs.get("height"),
+        "matching": "footprint" if footprints is not None else "closest",
     }
+    if footprints is not None:
+        refs[name]["footprints"] = dict(footprints.attrs)
     if named:
         counts = pd.Series(best_name[matched]).value_counts()
         refs[name]["references"] = {

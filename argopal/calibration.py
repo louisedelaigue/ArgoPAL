@@ -77,11 +77,23 @@ def _reference_column(pal, reference):
     return reference, col
 
 
-def _within(pal, reference, max_distance_km):
+def _within(pal, reference, max_distance_km, min_footprint_r=None):
+    """Measurements close enough to their reference: within
+    `max_distance_km` of it and/or inside its wind footprint (R at least
+    `min_footprint_r`, see `wind_footprints`)."""
+    ok = np.ones(len(pal), dtype=bool)
     dist_col = f"{reference}_distance_km"
-    if max_distance_km is None or dist_col not in pal:
-        return np.ones(len(pal), dtype=bool)
-    return (pal[dist_col] <= max_distance_km).to_numpy()
+    if max_distance_km is not None and dist_col in pal:
+        ok &= (pal[dist_col] <= max_distance_km).to_numpy()
+    if min_footprint_r is not None:
+        r_col = f"{reference}_footprint_r"
+        if r_col not in pal:
+            raise KeyError(
+                f"No {r_col!r}: collocate the reference with footprints= "
+                "(see wind_footprints) to select by footprint."
+            )
+        ok &= (pal[r_col] >= min_footprint_r).to_numpy()
+    return ok
 
 
 def average_to_reference(
@@ -91,6 +103,7 @@ def average_to_reference(
     use=None,
     average=True,
     window="1h",
+    min_footprint_r=None,
 ):
     """Average the measurements around each reference value.
 
@@ -115,6 +128,10 @@ def average_to_reference(
         Further restricts the measurements.
     average : bool, optional
         False returns the selected measurements without averaging.
+    min_footprint_r : float, optional
+        Instead of (or as well as) the distance, keep the measurements
+        inside the wind footprint of their reference: R at least this
+        (needs a collocation with `footprints=`, see `wind_footprints`).
     window : str or pd.Timedelta, optional
         Width of the averaging window, centred on each reference time:
         "1h" (default) averages the measurements from 30 min before
@@ -139,7 +156,7 @@ def average_to_reference(
         "U_<model>_fit") are computed from the averaged spectral level.
     """
     reference, ref_col = _reference_column(pal, reference)
-    rows_ok = _within(pal, reference, max_distance_km)
+    rows_ok = _within(pal, reference, max_distance_km, min_footprint_r)
     if use is not None:
         rows_ok = rows_ok & np.asarray(use, dtype=bool)
     rows_ok = rows_ok & pal[ref_col].notna().to_numpy()
@@ -257,6 +274,7 @@ def wind_skill(
     by_reference=False,
     average=None,
     window=None,
+    min_footprint_r=None,
 ):
     """Skill of every wind estimate in a table against a reference.
 
@@ -281,6 +299,9 @@ def wind_skill(
     window : str, optional
         Averaging window around each reference time; by default as for
         `fit_wind_models` ("1h" if not run).
+    min_footprint_r : float, optional
+        Select by wind footprint (see `average_to_reference`); by default
+        as for `fit_wind_models`.
 
     Returns
     -------
@@ -298,8 +319,15 @@ def wind_skill(
         average = pal.attrs.get("wind_fits", {}).get("average", True)
     if window is None:
         window = pal.attrs.get("wind_fits", {}).get("window", "1h")
+    if min_footprint_r is None:
+        min_footprint_r = pal.attrs.get("wind_fits", {}).get("min_footprint_r")
     pts = average_to_reference(
-        pal, reference, max_distance_km, average=average, window=window
+        pal,
+        reference,
+        max_distance_km,
+        average=average,
+        window=window,
+        min_footprint_r=min_footprint_r,
     )
     name_col = f"{reference}_reference_name"
     subsets = [("all", np.ones(len(pts), dtype=bool))]
@@ -337,6 +365,7 @@ def fit_wind_models(
     use=None,
     average=True,
     window="1h",
+    min_footprint_r=None,
 ):
     """Refit the literature wind models to a collocated reference wind.
 
@@ -372,6 +401,11 @@ def fit_wind_models(
         default "1h" (30 min before to 30 min after); "nearest" averages
         the measurements matched to each reference value.  See
         `average_to_reference`.
+    min_footprint_r : float, optional
+        Fit on the measurements inside the wind footprint of their
+        reference (R at least this) rather than, or as well as, within
+        `max_distance_km` (pass None for no distance limit).  Needs a
+        collocation with `footprints=` (see `wind_footprints`).
 
     Returns
     -------
@@ -397,6 +431,7 @@ def fit_wind_models(
         use=use,
         average=average,
         window=window,
+        min_footprint_r=min_footprint_r,
     )
     out = pal.copy()
     rows, coefs = [], {}
@@ -454,6 +489,7 @@ def fit_wind_models(
         "max_distance_km": max_distance_km,
         "average": average,
         "window": window,
+        "min_footprint_r": min_footprint_r,
         "coefficients": coefs,
     }
     fits = pd.DataFrame(rows)
@@ -462,6 +498,7 @@ def fit_wind_models(
         "max_distance_km": max_distance_km,
         "average": average,
         "window": window,
+        "min_footprint_r": min_footprint_r,
     }
     return out, fits
 
@@ -513,7 +550,12 @@ def flag_ship_deviation(
     wcol = wind if wind.startswith("U_") else f"U_{wind}"
     if wcol not in pal:
         raise KeyError(f"No {wcol!r} column.")
-    near = _within(pal, reference, max_distance_km)
+    near = _within(
+        pal,
+        reference,
+        max_distance_km,
+        pal.attrs.get("wind_fits", {}).get("min_footprint_r"),
+    )
     err = (pal[wcol] - pal[ref_col]).abs()
     clean = near & ~pal["ship_flag"].to_numpy(bool)
     rmse = wind_metrics(pal.loc[clean, wcol], pal.loc[clean, ref_col])["rmse"]
@@ -705,6 +747,7 @@ def wind_uncertainty(
         use=use,
         average=fits.get("average", True),
         window=fits.get("window", "1h"),
+        min_footprint_r=fits.get("min_footprint_r"),
     )
     sigma_col = f"{reference}_sigma"
     rng = np.random.default_rng(seed)
@@ -812,3 +855,148 @@ def wind_uncertainty(
         )
     )
     return out, table
+
+
+def reference_diagnostics(park_table, reference=None, model="nystuen2015"):
+    """How well each reference agrees with the others when refitting.
+
+    One wind model is fitted to each reference separately, and to all of
+    them together (as `fit_wind_models` does), on the same points as the
+    refit (same selection and averaging).  For each reference: the skill
+    of the published, pooled and own coefficients, in-sample and with
+    leave-one-cycle-out cross-validation; and how a reference's own
+    coefficients do on the other references.  A reference that needs a
+    very different curve, or whose coefficients transfer badly, is worth
+    checking (anemometer height, distance, exposure, data quality).
+
+    Parameters
+    ----------
+    park_table : pd.DataFrame
+        PAL table after `collocate_reference` and `fit_wind_models`.
+    reference : str, optional
+        Name given to `collocate_reference`; by default the one used for
+        fitting.
+    model : str, optional
+        Wind model, by default "nystuen2015".
+
+    Returns
+    -------
+    dict
+        "fits" : pd.DataFrame, one row per reference and one for "all":
+            n points and cycles, median distance, the coefficients fitted
+            to that reference alone, and RMSE / R² / bias (m s-1) of the
+            published, pooled and own coefficients, plus the
+            cross-validated RMSE of the pooled and own fits
+            ("rmse_pooled_cv", "rmse_own_cv": each cycle predicted by a fit
+            without it).
+        "transfer" : pd.DataFrame, RMSE (m s-1) of the coefficients fitted
+            to one reference (rows, and "pooled") on each reference
+            (columns).
+        "curves" : pd.DataFrame, the wind from each set of coefficients
+            over the range of spectral levels.
+    """
+    fits = park_table.attrs.get("wind_fits", {})
+    if reference is None:
+        reference = fits.get("reference")
+    reference, ref_col = _reference_column(park_table, reference)
+    func, band, _ = LITERATURE_MODELS[model]
+    spl_col = f"spl_{band}Hz"
+    pts = average_to_reference(
+        park_table,
+        reference,
+        fits.get("max_distance_km", 40.0),
+        average=fits.get("average", True),
+        window=fits.get("window", "1h"),
+        min_footprint_r=fits.get("min_footprint_r"),
+    )
+    pts = pts.dropna(subset=[spl_col, ref_col])
+    name_col = f"{reference}_reference_name"
+    names = (
+        pts[name_col].astype(str).to_numpy() if name_col in pts
+        else np.full(len(pts), reference)
+    )  # fmt: skip
+    x = pts[spl_col].to_numpy(float)
+    y = pts[ref_col].to_numpy(float)
+    cycles = pts["cycle"].to_numpy() if "cycle" in pts else np.zeros(len(x))
+    dist_col = f"{reference}_distance_km"
+    dist = pts[dist_col].to_numpy(float) if dist_col in pts else None
+    p0 = list(COEFFICIENTS[model].values())
+    npar = len(p0)
+
+    def refit(sel):
+        if sel.sum() <= npar:
+            return None
+        try:
+            return _refit(func, x[sel], y[sel], p0)
+        except (RuntimeError, ValueError):
+            return None
+
+    every = np.ones(len(x), dtype=bool)
+    pooled = refit(every)
+    groups = ["all"] + sorted(set(names))
+    own = {g: refit(every if g == "all" else names == g) for g in groups}
+
+    def metrics(sel, coef):
+        if coef is None or not sel.any():
+            return {"rmse": np.nan, "r2": np.nan, "bias": np.nan}
+        m = wind_metrics(func(x[sel], *coef), y[sel])
+        return {k: m[k] for k in ("rmse", "r2", "bias")}
+
+    def cv_rmse(sel, pool):
+        """Leave-one-cycle-out: each cycle of `sel` predicted by a fit
+        without it (on `sel` only, or on everything if `pool`)."""
+        pred = np.full(len(x), np.nan)
+        for c in pd.unique(cycles[sel]):
+            test = sel & (cycles == c)
+            train = (every if pool else sel) & (cycles != c)
+            coef = refit(train)
+            if coef is not None:
+                pred[test] = func(x[test], *coef)
+        ok = sel & np.isfinite(pred)
+        if not ok.any():
+            return np.nan
+        return float(np.sqrt(np.mean((pred[ok] - y[ok]) ** 2)))
+
+    rows = []
+    for g in groups:
+        sel = every if g == "all" else names == g
+        row = {
+            "reference": g,
+            "n": int(sel.sum()),
+            "n_cycles": len(pd.unique(cycles[sel])),
+            "median_distance_km": (
+                float(np.nanmedian(dist[sel])) if dist is not None else np.nan
+            ),
+            "coefficients": (
+                dict(zip(COEFFICIENTS[model], map(float, own[g])))
+                if own[g] is not None
+                else None
+            ),
+        }
+        for label, coef in (
+            ("published", p0),
+            ("pooled", pooled),
+            ("own", own[g]),
+        ):
+            for k, v in metrics(sel, coef).items():
+                row[f"{k}_{label}"] = v
+        row["rmse_pooled_cv"] = cv_rmse(sel, pool=True)
+        row["rmse_own_cv"] = cv_rmse(sel, pool=False)
+        rows.append(row)
+    table = pd.DataFrame(rows)
+    sources = {"pooled": pooled, **{g: own[g] for g in groups[1:]}}
+    transfer = pd.DataFrame(
+        {
+            g: {s: metrics(names == g, c)["rmse"] for s, c in sources.items()}
+            for g in groups[1:]
+        }
+    )
+    spl = np.linspace(np.nanmin(x), np.nanmax(x), 50) if len(x) else []
+    curves = pd.DataFrame({"spl": spl, "published": func(spl, *p0)})
+    for s, c in sources.items():
+        if c is not None:
+            curves[s] = func(spl, *c)
+    meta = {"reference": reference, "model": model}
+    for t in (table, transfer, curves):
+        t.attrs = dict(meta)
+    return {"fits": table, "transfer": transfer, "curves": curves}

@@ -124,6 +124,10 @@ Collocation with reference winds, refitting of the models, skill and uncertainty
 .. autofunction:: wind_skill
 .. autofunction:: wind_metrics
 .. autofunction:: wind_uncertainty
+.. autofunction:: reference_diagnostics
+.. autofunction:: wind_footprints
+.. autofunction:: read_reanalysis
+.. autofunction:: footprint_r_at
 ```
 
 ## Ship noise (AIS)
@@ -159,6 +163,7 @@ One figure per processing step; each returns `(fig, axes)`.
 .. autofunction:: plot_wind
 .. autofunction:: plot_reference_map
 .. autofunction:: plot_reference_timeseries
+.. autofunction:: plot_reference_fits
 .. autofunction:: plot_wind_fit
 .. autofunction:: plot_ais
 .. autofunction:: save_figure

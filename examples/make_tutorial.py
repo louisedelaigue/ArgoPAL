@@ -489,6 +489,52 @@ print("σ_ref from the table:", round(p.attrs["wind_uncertainty"]["models"]
 """)
 
 md("""
+**Do the buoys agree?**  `reference_diagnostics` fits the model to each
+buoy separately and to all together.  A buoy's own fit always looks
+better on its own data; the cross-validated RMSE (each cycle predicted
+by a fit without it) says whether it really is, and the transfer table
+how one buoy's coefficients do on the other:
+""")
+
+code("""
+d = argopal.reference_diagnostics(cal["park"])
+d["fits"][["reference", "n", "n_cycles", "rmse_published", "rmse_pooled",
+           "rmse_own", "rmse_pooled_cv", "rmse_own_cv"]].round(2)
+""")
+
+code("""
+d["transfer"].round(2)
+""")
+
+code("""
+fig, ax = argopal.plot_reference_fits(cal["park"])
+""")
+
+md("""
+Here DYFAMED's curve is close to the published one and PACA's lower: the
+two buoys disagree about the float-wind relationship, and the pooled
+refit lies between them.
+
+**Wind footprints instead of a distance.**  Near the coast, the wind a
+few tens of kilometres from a buoy can differ from the buoy's.  With a
+reanalysis of the 10 m wind over the float's area and period (e.g. ERA5
+`u10`/`v10`), each measurement can be matched to the buoy whose wind
+footprint (where the reanalysis wind varies as at the buoy, R ≥ 0.9)
+covers it, instead of the closest buoy within 40 km.  No reanalysis comes
+with these examples; with one:
+
+```python
+result = argopal.process_float(
+    7902280,
+    reference="data/reference_winds_2026.csv",
+    footprints="era5_u10_v10_2026.nc",
+    footprint_min_r=0.9,
+)
+argopal.plot_reference_map(result["park"], footprints=result["footprints"])
+```
+""")
+
+md("""
 **Other table layouts.**
 
 - Column names are recognised from common aliases (`time`, `ff`, `u10`,

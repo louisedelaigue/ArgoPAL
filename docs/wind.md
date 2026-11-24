@@ -113,3 +113,57 @@ than the RMSE of uncontaminated measurements; `ais_action="remove"` then
 blanks only those.  Figures: `argopal.plot_wind` (published and refitted, ±1σ,
 with the buoy) and `argopal.plot_wind_fit` (float vs buoy, coloured by
 distance).
+
+## Do the references agree? Diagnostics
+
+The refit gives one set of coefficients for all references together.  If
+the references disagree about how the float's sound level relates to the
+wind (anemometer height, distance, exposure, data quality), that single
+curve is a compromise that fits none of them well.  To check:
+
+```python
+d = argopal.reference_diagnostics(result["park"])
+d["fits"]       # per reference: own fit, pooled fit, published; in-sample
+                # and leave-one-cycle-out RMSE
+d["transfer"]   # RMSE of each reference's coefficients on each reference
+argopal.plot_reference_fits(result["park"])  # each reference's curve
+```
+
+A reference whose own curve is far from the others, or whose
+coefficients do badly on the other references, is worth checking.  Its
+own fit always looks better in-sample; the cross-validated RMSE
+(`rmse_own_cv`, `rmse_pooled_cv`) says whether it really is.
+
+## Selecting by wind footprint instead of distance
+
+Near the coast, the wind 40 km from a buoy can differ from the wind at the
+buoy (fetch, orography), and a buoy further away can be a better match.
+Instead of a fixed radius, the measurements compared with each reference
+can be chosen by **wind footprint**: where a reanalysis shows the wind
+varying as at the reference.
+
+```python
+result = argopal.process_float(
+    7902280,
+    reference="reference_winds.csv",
+    footprints="era5_u10_v10.nc",   # reanalysis over the float's area and period
+    footprint_min_r=0.9,            # default
+)
+argopal.plot_reference_map(result["park"], footprints=result["footprints"])
+```
+
+For each reference, the correlation R between the reanalysis wind at the
+reference's position and at every grid cell is computed
+(`wind_footprints`); the reference's own wind is not used.  By default
+the wind is correlated as given: with hourly data over the deployment,
+the footprint is where the wind followed the reference's during the
+deployment.  `footprint_anomaly="monthly"` correlates monthly anomalies
+instead (monthly means minus each calendar month's mean), for a
+reanalysis over several years: a climatological footprint.  Each float measurement is
+matched to the reference whose footprint has the highest R at its
+position (instead of the closest one), and fitting, skill and uncertainty
+use the measurements where that R is at least `footprint_min_r`, however
+far from the reference; `fit_max_distance_km` is then not used.  The
+reanalysis is a NetCDF file or xarray dataset with the 10 m wind ("u10"
+and "v10", as in ERA5, or a speed such as "si10"); ArgoPAL does not
+download it.

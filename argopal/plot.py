@@ -573,16 +573,29 @@ def _has_float_wind(park_table, p):
     return p[winds].notna().any(axis=1)
 
 
-def _used_measurements(park_table, reference, radius_km):
-    """Measurements compared with the reference when refitting: within
-    `radius_km` of the reference value matched to them, and with a float
-    wind (or spectral level) to compare."""
+def _near(park_table, reference, radius_km, min_r=None):
+    """Measurements close enough to the reference value matched to them:
+    within `radius_km`, or inside its footprint (R >= `min_r`) if given."""
     p = park_table.dropna(subset=["latitude", "longitude"])
-    dist = p.get(f"{reference}_distance_km")
-    if dist is None:
-        return p.iloc[:0]
-    ok = (dist <= radius_km) & p[f"U_{reference}"].notna()
-    return p[ok & _has_float_wind(park_table, p)]
+    if min_r is not None:
+        r = p.get(f"{reference}_footprint_r")
+        if r is None:
+            return p.iloc[:0]
+        ok = r >= min_r
+    else:
+        dist = p.get(f"{reference}_distance_km")
+        if dist is None:
+            return p.iloc[:0]
+        ok = dist <= radius_km
+    return p[ok & p[f"U_{reference}"].notna()]
+
+
+def _used_measurements(park_table, reference, radius_km, min_r=None):
+    """Measurements compared with the reference when refitting: close
+    enough to the reference value matched to them (`_near`), and with a
+    float wind (or spectral level) to compare."""
+    near = _near(park_table, reference, radius_km, min_r)
+    return near[_has_float_wind(park_table, near)]
 
 
 def _station_positions(used, reference, name, fallback, merge_km=2.0):
@@ -616,7 +629,11 @@ def _km(lat1, lon1, lat2, lon2):
 
 
 def plot_reference_map(
-    park_table, reference=None, radius_km=None, annotate=False
+    park_table,
+    reference=None,
+    radius_km=None,
+    footprints=None,
+    annotate=False,
 ):
     """Map of the float's trajectory and of the references used to refit
     the wind models.
@@ -641,7 +658,12 @@ def plot_reference_map(
         fitting, or the only one.
     radius_km : float, optional
         Radius of the circles and of the measurements shown as used; by
-        default the one used by `fit_wind_models`, else 40 km.
+        default the one used by `fit_wind_models`, else 40 km.  Not used
+        when the refit selected by footprint.
+    footprints : xr.DataArray, optional
+        Wind footprints (`wind_footprints`, or `result["footprints"]`).
+        When the refit selected by footprint, each reference's footprint
+        (R at least the threshold used) is outlined instead of a circle.
     annotate : bool, optional
         Add a title and notes, by default False.
 
@@ -670,13 +692,13 @@ def plot_reference_map(
     pc = ccrs.PlateCarree()
     p = park_table.dropna(subset=["latitude", "longitude"])
     wind = _has_float_wind(park_table, p)
-    used = _used_measurements(park_table, reference, radius_km)
-    dist = p.get(f"{reference}_distance_km")
-    near = (
-        p[(dist <= radius_km) & p[f"U_{reference}"].notna()]
-        if dist is not None
-        else p.iloc[:0]
-    )
+    min_r = park_table.attrs.get("wind_fits", {}).get("min_footprint_r")
+    used = _used_measurements(park_table, reference, radius_km, min_r)
+    near = _near(park_table, reference, radius_km, min_r)
+    within = (
+        f"inside footprint, R ≥ {min_r:g}" if min_r is not None
+        else f"within {radius_km:g} km"
+    )  # fmt: skip
     name_col = f"{reference}_reference_name"
 
     def of(table, name):
@@ -725,7 +747,7 @@ def plot_reference_map(
         ax.plot(
             used["longitude"], used["latitude"], ls="none", marker=".",
             ms=3, color="tab:red", transform=pc, zorder=3,
-            label=f"Used for fitting (within {radius_km:g} km)",
+            label=f"Used for fitting ({within})",
         )  # fmt: skip
         geod = Geodesic()
         labelled = set()
@@ -734,14 +756,25 @@ def plot_reference_map(
             (unused, BEFORE, "Reference not used (no float wind)"),
         ):
             for name, positions in group.items():
-                for k, (la, lo) in enumerate(positions):
-                    ring = np.asarray(geod.circle(lo, la, radius_km * 1e3))
-                    ax.plot(
-                        np.append(ring[:, 0], ring[0, 0]),
-                        np.append(ring[:, 1], ring[0, 1]),
-                        color=colour, ls="--" if k == 0 else ":", lw=0.8,
-                        transform=pc, zorder=3,
+                if min_r is not None and (
+                    footprints is not None
+                    and name in footprints["reference"].to_numpy()
+                ):
+                    f = footprints.sel(reference=name)
+                    ax.contour(
+                        f["longitude"], f["latitude"], f, levels=[min_r],
+                        colors=[colour], linestyles="--",
+                        linewidths=0.9, transform=pc, zorder=3,
                     )  # fmt: skip
+                for k, (la, lo) in enumerate(positions):
+                    if min_r is None:
+                        ring = np.asarray(geod.circle(lo, la, radius_km * 1e3))
+                        ax.plot(
+                            np.append(ring[:, 0], ring[0, 0]),
+                            np.append(ring[:, 1], ring[0, 1]),
+                            color=colour, ls="--" if k == 0 else ":",
+                            lw=0.8, transform=pc, zorder=3,
+                        )  # fmt: skip
                     ax.plot(
                         lo, la, ls="none", marker="^",
                         ms=9 if k == 0 else 6, color=colour, mec="white",
@@ -768,9 +801,8 @@ def plot_reference_map(
             several = [k for k, v in shown.items() if len(v) > 1]
             note = (
                 f"{len(used)} of {len(p)} measurements used for fitting, "
-                f"within {radius_km:g} km of "
-                + (", ".join(shown) if shown else "no reference")
-                + "."
+                f"{within.replace('inside footprint', 'inside the footprint')} "
+                "of " + (", ".join(shown) if shown else "no reference") + "."
             )
             if unused:
                 note += (
@@ -1206,12 +1238,14 @@ def plot_wind_fit(
     if window is None:
         window = park_table.attrs.get("wind_fits", {}).get("window", "1h")
     dist = park_table.get(f"{reference}_distance_km")
+    min_r = park_table.attrs.get("wind_fits", {}).get("min_footprint_r")
     df = average_to_reference(
         park_table,
         reference,
-        max_distance_km if dist is not None else None,
+        max_distance_km if dist is not None and min_r is None else None,
         average=average,
         window=window,
+        min_footprint_r=min_r,
     )
     refs = {
         m: park_table.attrs["wind_models"]["applied"][m]["reference"]
@@ -1353,8 +1387,14 @@ def plot_reference_timeseries(
         average = fits.get("average", True)
     if window is None:
         window = fits.get("window", "1h")
+    min_r = fits.get("min_footprint_r")
     pts = average_to_reference(
-        park_table, reference, radius_km, average=average, window=window
+        park_table,
+        reference,
+        None if min_r is not None else radius_km,
+        average=average,
+        window=window,
+        min_footprint_r=min_r,
     )
     # only points with a float wind: those compared in the refit (e.g. not
     # after the delayed-mode data end)
@@ -1425,6 +1465,100 @@ def plot_reference_timeseries(
                 + "; ".join(parts) + " (m s$^{-1}$).",
             )  # fmt: skip
     return fig, axes
+
+
+def plot_reference_fits(
+    park_table, reference=None, model="nystuen2015", annotate=False
+):
+    """Each reference's own fit, against the fit to all of them.
+
+    The float's spectral level against the reference wind (one colour per
+    reference, the points used in the refit), with the wind model fitted
+    to each reference alone, to all of them (black), and with its
+    published coefficients (grey, dashed).  References needing clearly
+    different curves disagree about the float-wind relationship (see
+    `reference_diagnostics`).
+
+    Parameters
+    ----------
+    park_table : pd.DataFrame
+        PAL table after `collocate_reference` and `fit_wind_models`.
+    reference : str, optional
+        By default the one used for fitting.
+    model : str, optional
+        Wind model, by default "nystuen2015".
+    annotate : bool, optional
+        Add a title and a note with each reference's RMSE.
+
+    Returns
+    -------
+    fig, ax
+    """
+    from .calibration import average_to_reference, reference_diagnostics
+    from .wind import LITERATURE_MODELS
+
+    diag = reference_diagnostics(park_table, reference, model)
+    reference = diag["fits"].attrs["reference"]
+    _, band, _ = LITERATURE_MODELS[model]
+    fits = park_table.attrs.get("wind_fits", {})
+    pts = average_to_reference(
+        park_table,
+        reference,
+        fits.get("max_distance_km", 40.0),
+        average=fits.get("average", True),
+        window=fits.get("window", "1h"),
+        min_footprint_r=fits.get("min_footprint_r"),
+    ).dropna(subset=[f"spl_{band}Hz", f"U_{reference}"])
+    name_col = f"{reference}_reference_name"
+    curves = diag["curves"]
+    names = [c for c in curves if c not in ("spl", "published", "pooled")]
+    colours = plt.get_cmap("tab10")
+    applied = park_table.attrs.get("wind_models", {}).get("applied", {})
+    label = applied.get(model, {}).get("reference", model)
+    with _style():
+        fig, ax = plt.subplots(figsize=(8, 6), layout="constrained")
+        for i, name in enumerate(names):
+            g = (
+                pts[pts[name_col].astype(str) == name]
+                if name_col in pts
+                else pts
+            )
+            c = colours(i % 10)
+            ax.plot(
+                g[f"spl_{band}Hz"], g[f"U_{reference}"], ls="none",
+                marker=".", ms=4, alpha=0.4, color=c,
+            )  # fmt: skip
+            ax.plot(
+                curves["spl"], curves[name], color=c, lw=2,
+                label=f"{name} ({len(g)} points)",
+            )  # fmt: skip
+        ax.plot(
+            curves["spl"], curves["pooled"], color=AFTER, lw=2.5,
+            label="All references (refit)",
+        )  # fmt: skip
+        ax.plot(
+            curves["spl"], curves["published"], color=BEFORE, lw=1.5,
+            ls="--", label=f"{label}, published",
+        )  # fmt: skip
+        ax.set_xlabel(
+            f"Spectral level at {_khz(band)} (dB re 1 µPa$^2$ Hz$^{{-1}}$)"
+        )
+        ax.set_ylabel("Reference wind speed (m s$^{-1}$)")
+        ax.set_ylim(bottom=0)
+        ax.legend(loc="upper left", fontsize=8)
+        if annotate:
+            t = diag["fits"].set_index("reference")
+            note = "; ".join(
+                f"{n}: RMSE own {t.at[n, 'rmse_own']:.2f}, all "
+                f"{t.at[n, 'rmse_pooled']:.2f} (cross-validated "
+                f"{t.at[n, 'rmse_own_cv']:.2f}, {t.at[n, 'rmse_pooled_cv']:.2f})"
+                for n in names
+            )
+            _annotate(
+                fig, f"{_wmo(park_table)}{label} fitted per reference",
+                note + " m s$^{-1}$.",
+            )  # fmt: skip
+    return fig, ax
 
 
 def plot_ais(park_table, band=None, annotate=False):
@@ -1550,7 +1684,9 @@ def plot_all(
     if result["park"].attrs.get("wind_models", {}).get("applied"):
         figs["wind"] = plot_wind(result["park"], **a)[0]
     if result["park"].attrs.get("references"):
-        figs["reference_map"] = plot_reference_map(result["park"], **a)[0]
+        figs["reference_map"] = plot_reference_map(
+            result["park"], footprints=result.get("footprints"), **a
+        )[0]
     if any(c.endswith("_fit") for c in result["park"]):
         figs["wind_fit"] = plot_wind_fit(result["park"], **a)[0]
         figs["reference_timeseries"] = plot_reference_timeseries(

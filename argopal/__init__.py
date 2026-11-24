@@ -113,6 +113,7 @@ from .calibration import (
     average_to_reference,
     fit_wind_models,
     flag_ship_deviation,
+    reference_diagnostics,
     wind_metrics,
     wind_skill,
     wind_uncertainty,
@@ -151,6 +152,7 @@ from .correction import (
 )
 from .export import export, read_export
 from .fetch import fetch_pal
+from .footprint import footprint_r_at, read_reanalysis, wind_footprints
 from .gdac import download_aux, download_core, find_dac, list_files
 from .meta import __version__, hello
 from .pipeline import process_float
@@ -165,6 +167,7 @@ from .plot import (
     plot_park,
     plot_positions,
     plot_profiles,
+    plot_reference_fits,
     plot_reference_map,
     plot_reference_timeseries,
     plot_wind,
@@ -231,6 +234,7 @@ __all__ = [
     "fit_wind_models",
     "flag_ship_deviation",
     "flag_ships",
+    "footprint_r_at",
     "gridded_profiles",
     "hello",
     "list_files",
@@ -245,6 +249,7 @@ __all__ = [
     "plot_park",
     "plot_positions",
     "plot_profiles",
+    "plot_reference_fits",
     "plot_reference_map",
     "plot_reference_timeseries",
     "plot_wind",
@@ -260,13 +265,16 @@ __all__ = [
     "read_positions",
     "read_profile_index",
     "read_profiles",
+    "read_reanalysis",
     "read_reference",
+    "reference_diagnostics",
     "save_figure",
     "select_bands",
     "select_mode",
     "spectral_level",
     "third_octave_bandwidth",
     "track_bbox",
+    "wind_footprints",
     "wind_literature",
     "wind_metrics",
     "wind_nystuen2015",

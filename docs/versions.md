@@ -24,6 +24,15 @@
   measurements used (also in `plot_all` when there is a reference).
   `collocate_reference` records each reference's position (the most
   frequent one, and how far the others are).
+- `reference_diagnostics` and `plot_reference_fits`: the wind model
+  fitted to each reference separately and to all together, in-sample and
+  cross-validated, and how each reference's coefficients do on the others.
+- Wind footprints: with a reanalysis (`footprints=`), each measurement is
+  matched to the reference whose wind footprint (correlation of the
+  reanalysis wind with the wind at the reference, `wind_footprints`) has
+  the highest R at its position, and the refit uses the measurements with
+  R at least `footprint_min_r` (0.9) instead of those within 40 km;
+  `plot_reference_map` outlines the footprints.
 - Reference winds are converted to 10 m, the height the wind models are
   calibrated for: `wind_to_10m` (neutral logarithmic profile, or power
   law), from a `height_m` column or `reference_height_m=` (one value or
