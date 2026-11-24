@@ -306,8 +306,25 @@ fig, ax = argopal.plot_reference_map(cal["park"], annotate=True)
 """)
 
 code("""
-cal["wind_fits"][["model", "n", "rmse_published", "rmse_fitted",
-                  "r2_published", "r2_fitted", "bias_published", "bias_fitted"]].round(2)
+cal["wind_fits"][["model", "reference_name", "n", "n_applied",
+                  "rmse_published", "rmse_fitted", "r2_fitted",
+                  "bias_published"]].round(2)
+""")
+
+md("""
+**One calibration per buoy.**  Each buoy's coefficients are fitted on the
+float data near it, and used there (`n` points).  Every other measurement
+uses the coefficients of the closest buoy (`n_applied` in all), and
+`buoys_calibration` says whose.  `calibration="pooled"` would fit one set
+of coefficients to both buoys together.
+
+The whole record, two months per row: the refitted wind with ±1σ, the
+periods used for each buoy's refit shaded in its colour, and along the
+top whose coefficients apply:
+""")
+
+code("""
+fig, axes = argopal.plot_wind_timeline(cal["park"])
 """)
 
 md("""
@@ -390,7 +407,9 @@ raw-mode `park` table from section 3, which has no reference yet.
 
 **Radius.** `fit_max_distance_km` in `process_float`, or `max_distance_km`
 in `fit_wind_models`, `wind_skill` and `wind_uncertainty`, sets how close a
-measurement must be to its reference to be used; `None` uses all.
+measurement must be to its reference to be used; `None` uses all.  To
+compare settings with one number each, these examples fit one set of
+coefficients for both buoys (`calibration="pooled"`).
 """)
 
 code("""
@@ -398,7 +417,9 @@ park = argopal.collocate_reference(raw["park"], buoys, name="buoys")
 for radius in (10, 25, 40, 80):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        _, fits = argopal.fit_wind_models(park, max_distance_km=radius)
+        _, fits = argopal.fit_wind_models(
+            park, max_distance_km=radius, calibration="pooled"
+        )
     row = fits.set_index("model").loc["nystuen2015"]
     print(f"{radius:>3} km: n = {row['n']:>6}, RMSE = {row['rmse_fitted']:.2f}, "
           f"R² = {row['r2_fitted']:.2f}")
@@ -431,12 +452,16 @@ value it is, and `average=False` uses every measurement on its own.
 
 code("""
 for window in ("20min", "1h", "2h"):
-    _, fits = argopal.fit_wind_models(park, max_distance_km=40, window=window)
+    _, fits = argopal.fit_wind_models(
+        park, max_distance_km=40, window=window, calibration="pooled"
+    )
     row = fits.set_index("model").loc["nystuen2015"]
     print(f"{window:>6}: {row['n']} buoy values, "
           f"{row['n_measurements'] / row['n']:.1f} measurements each, "
           f"RMSE = {row['rmse_fitted']:.2f}")
-_, fits = argopal.fit_wind_models(park, max_distance_km=40, average=False)
+_, fits = argopal.fit_wind_models(
+    park, max_distance_km=40, average=False, calibration="pooled"
+)
 row = fits.set_index("model").loc["nystuen2015"]
 print(f"  none: {row['n']} measurements, RMSE = {row['rmse_fitted']:.2f}")
 """)
@@ -484,8 +509,9 @@ illustrative = buoys.assign(
 p = argopal.collocate_reference(raw["park"], illustrative, name="buoys")
 p, _ = argopal.fit_wind_models(p, models=["nystuen2015"])
 p, _ = argopal.wind_uncertainty(p, n_bootstrap=20)
-print("σ_ref from the table:", round(p.attrs["wind_uncertainty"]["models"]
-                                    ["nystuen2015"]["sigma_ref"], 2))
+by_buoy = p.attrs["wind_uncertainty"]["models"]["nystuen2015"]
+print("σ_ref from the table:",
+      {buoy: round(v["sigma_ref"], 2) for buoy, v in by_buoy.items()})
 """)
 
 md("""

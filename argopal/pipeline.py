@@ -51,6 +51,7 @@ def process_float(
     reference=None,
     reference_max_time="1h",
     reference_height_m=None,
+    calibration="per_reference",
     footprints=None,
     footprint_min_r=0.9,
     footprint_anomaly=None,
@@ -172,6 +173,13 @@ def process_float(
         height they are assumed to be 10 m already (with a warning).
     fit_reference : str, optional
         Reference used to refit the models; by default the first one.
+    calibration : {"per_reference", "pooled"}, optional
+        "per_reference" (default): the wind models are refitted to each
+        reference separately, on the measurements selected for it (within
+        `fit_max_distance_km`, or inside its footprint); every other
+        measurement uses the coefficients of the closest reference.
+        "pooled": one set of coefficients for all references, used
+        everywhere.  See `fit_wind_models`.
     footprints : str, xr.Dataset or xr.DataArray, optional
         Select the measurements compared with each reference by wind
         footprint instead of distance: a reanalysis wind (file(s) or
@@ -331,6 +339,7 @@ def process_float(
             average=reference_average,
             window=reference_window,
             min_footprint_r=min_r,
+            calibration=calibration,
         )
         extra["wind_skill"] = wind_skill(
             pal,

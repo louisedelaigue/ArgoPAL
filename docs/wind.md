@@ -93,6 +93,24 @@ every measurement; σ is then the error on the reference's time scale
 take the same `window=` and `average=` options (by default those of the
 fit).
 
+**One calibration per reference** (the default, `calibration=
+"per_reference"`): the models are refitted to each reference separately,
+on the measurements selected for it (within its radius or inside its
+footprint).  Those measurements use their reference's coefficients;
+every other measurement, used in no refit, uses the coefficients of the
+closest reference that has some.  `ref_calibration` says whose
+coefficients each measurement uses, and `ref_used` which measurements the
+refit used.  `calibration="pooled"` fits one set of coefficients to all
+references together and uses it everywhere.
+
+```python
+argopal.plot_wind_timeline(result["park"])  # the whole record, 2 months per row
+```
+
+shows the refitted wind (±1σ) through the deployment, the periods used
+for each reference's refit shaded in its colour, and along the top of
+each row whose coefficients apply.
+
 Steps: `collocate_reference`, `fit_wind_models` (nonlinear least squares
 from the published coefficients; adds `U_<model>_fit`), `wind_skill` /
 `wind_metrics` (n, bias, RMSE, R² = 1 − SS_res/SS_tot, Pearson r², slope,

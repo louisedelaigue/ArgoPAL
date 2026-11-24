@@ -24,6 +24,16 @@
   measurements used (also in `plot_all` when there is a reference).
   `collocate_reference` records each reference's position (the most
   frequent one, and how far the others are).
+- One calibration per reference, the default (`calibration=
+  "per_reference"`; `"pooled"` for one set of coefficients for all): each
+  reference's coefficients are fitted on the measurements selected for it
+  and used there; every other measurement uses those of the closest
+  reference.  New columns `<name>_used` (measurements used in the refit)
+  and `<name>_calibration` (whose coefficients each measurement uses);
+  `wind_fits` and `wind_uncertainty` have one row per reference.
+- `plot_wind_timeline`: the float wind through the whole deployment, a
+  few months per row, with the refit periods shaded per reference and
+  whose coefficients apply along the top.
 - `reference_diagnostics` and `plot_reference_fits`: the wind model
   fitted to each reference separately and to all together, in-sample and
   cross-validated, and how each reference's coefficients do on the others.

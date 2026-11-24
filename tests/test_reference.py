@@ -212,11 +212,21 @@ def test_uncertainty_uses_table_sigma():
         given, _ = argopal.wind_uncertainty(
             out, n_bootstrap=5, reference_sigma=1
         )
+    # one calibration per buoy: each buoy's measurements get its own sigma
+    by_buoy = q.groupby("buoy_calibration")["U_nystuen2015_fit_sigma_ref"]
+    assert by_buoy.first().to_dict() == pytest.approx({"A": 0.3, "B": 0.4})
+    assert (given["U_nystuen2015_fit_sigma_ref"].dropna() == 1).all()
+    # pooled: one sigma, the RMS of both
+    pooled, _ = argopal.fit_wind_models(
+        pal, max_distance_km=None, calibration="pooled"
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        qp, _ = argopal.wind_uncertainty(pooled, n_bootstrap=5)
     rms = np.sqrt((0.3**2 + 0.4**2) / 2)
-    assert q["U_nystuen2015_fit_sigma_ref"].dropna().unique() == (
+    assert qp["U_nystuen2015_fit_sigma_ref"].dropna().unique() == (
         pytest.approx(rms)
     )
-    assert (given["U_nystuen2015_fit_sigma_ref"].dropna() == 1).all()
     skill = argopal.wind_skill(out, max_distance_km=None, by_reference=True)
     assert list(skill["reference_name"].unique()) == ["all", "A", "B"]
 
@@ -302,7 +312,8 @@ def test_window_carried_from_fit_to_skill_and_uncertainty():
     skill = argopal.wind_skill(out)
     assert skill.attrs["window"] == "20min"
     assert (
-        q.attrs["wind_uncertainty"]["models"]["nystuen2015"]["n_points"] == n20
+        q.attrs["wind_uncertainty"]["models"]["nystuen2015"]["all"]["n_points"]
+        == n20
     )
 
 
@@ -338,7 +349,7 @@ def test_fit_and_skill_on_averaged_points():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         q, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
-    info = q.attrs["wind_uncertainty"]["models"]["nystuen2015"]
+    info = q.attrs["wind_uncertainty"]["models"]["nystuen2015"]["all"]
     assert info["n_points"] == n_hours
     assert q["U_nystuen2015_fit_sigma"].notna().sum() == len(pal)
 
@@ -781,3 +792,115 @@ def test_collocation_records_the_height():
     assert out["U_b"].iloc[0] == pytest.approx(argopal.wind_to_10m(5.0, 4.0))
     h = out.attrs["references"]["b"]["height"]
     assert h["method"] == "log" and h["height_m"]["A"] == [4.0]
+
+
+def _two_buoy_float(seed=3):
+    """A float 24 h at buoy A, then 24 h at buoy B (30 km north), then a
+    few measurements 80 km north of A (50 km from B): too far for the
+    refit.  Buoy B's wind is twice as sensitive to the level as A's."""
+    rng = np.random.default_rng(seed)
+    t = pd.date_range(T0, periods=48 * 6, freq="10min")
+    spl = rng.uniform(40, 55, len(t))
+    lat = np.where(np.arange(len(t)) < 24 * 6, 43.38, 43.38 + 30 / 111.2)
+    far = np.arange(len(t)) >= len(t) - 6
+    lat = np.where(far, 43.38 + 80 / 111.2, lat)
+    pal = _pal(t, spl=spl)
+    pal["latitude"] = lat
+    pal["cycle"] = np.repeat(np.arange(1, 9), len(t) // 8)
+    pal = argopal.wind_literature(pal)
+    hourly = pal.set_index("datetime")["spl_8000Hz"].resample("1h").mean()
+    tables = []
+    for name, la, gain in (("A", 43.38, 0.4), ("B", 43.38 + 30 / 111.2, 0.8)):
+        tables.append(
+            pd.DataFrame(
+                {
+                    "reference_name": name,
+                    "datetime": hourly.index,
+                    "latitude": la,
+                    "longitude": 7.83,
+                    "wind_speed": 2 + gain * (hourly.to_numpy() - 40),
+                    "height_m": 10.0,
+                }
+            )
+        )
+    out = argopal.collocate_reference(pal, pd.concat(tables), name="b")
+    return out, far
+
+
+def test_calibration_per_reference():
+    pal, far = _two_buoy_float()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out, fits = argopal.fit_wind_models(pal, models=["nystuen2015"])
+    coefs = out.attrs["wind_fits"]["coefficients"]["nystuen2015"]
+    assert set(coefs) == {"A", "B"}
+    assert out.attrs["wind_fits"]["calibration"] == "per_reference"
+    assert list(fits["reference_name"]) == ["A", "B"]
+    # each buoy's points use its coefficients; the far ones (not used in
+    # the refit) use the closest buoy's, B's
+    cal = out["b_calibration"]
+    used = out["b_used"]
+    assert not used[far].any()
+    assert (cal[used] == out.loc[used, "b_reference_name"]).all()
+    assert (cal[far] == "B").all()
+    assert fits["n_applied"].sum() == len(out)
+    spl = out.loc[far, "spl_8000Hz"]
+    np.testing.assert_allclose(
+        out.loc[far, "U_nystuen2015_fit"],
+        argopal.wind_nystuen2015(spl, **coefs["B"]),
+    )
+    # B's wind rises faster with the level than A's
+    at = np.array([45.0, 52.0])
+    rise_a = np.diff(argopal.wind_nystuen2015(at, **coefs["A"]))[0]
+    rise_b = np.diff(argopal.wind_nystuen2015(at, **coefs["B"]))[0]
+    assert rise_b > 1.5 * rise_a
+    # pooled: one set for every measurement
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pooled, pfits = argopal.fit_wind_models(
+            pal, models=["nystuen2015"], calibration="pooled"
+        )
+    assert list(pfits["reference_name"]) == ["all"]
+    assert (pooled["b_calibration"] == "all").all()
+    with pytest.raises(ValueError, match="calibration"):
+        argopal.fit_wind_models(pal, calibration="nearest")
+
+
+def test_uncertainty_per_reference():
+    pal, _ = _two_buoy_float()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out, _ = argopal.fit_wind_models(pal, models=["nystuen2015"])
+        q, bins = argopal.wind_uncertainty(out, n_bootstrap=5)
+    models = q.attrs["wind_uncertainty"]["models"]["nystuen2015"]
+    assert set(models) == {"A", "B"}
+    assert models["A"]["n_applied"] + models["B"]["n_applied"] == len(q)
+    assert set(bins["reference_name"]) <= {"A", "B"}
+    assert q["U_nystuen2015_fit_sigma"].notna().any()
+
+
+def test_wind_timeline():
+    pal, _ = _two_buoy_float()
+    # without a refit: the published wind only
+    _, axes = argopal.plot_wind_timeline(pal)
+    assert len(axes) == 1  # two days: one row
+    labels = [ln.get_label() for ln in axes[0].lines]
+    assert "Nystuen et al. (2015), published" in labels
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out, _ = argopal.fit_wind_models(pal, models=["nystuen2015"])
+        out, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+    _, axes = argopal.plot_wind_timeline(out, annotate=True)
+    legend = [t.get_text() for t in axes[0].get_legend().get_texts()]
+    assert "Nystuen et al. (2015), refitted" in legend
+    assert any(t.startswith("A: used for refit") for t in legend)
+    assert any(t.startswith("B: used for refit") for t in legend)
+    # shaded refit periods and the coefficient strip
+    assert len(axes[0].patches) >= 4
+    # several rows for a longer record
+    longer = out.copy()
+    longer["datetime"] = longer["datetime"] + pd.to_timedelta(
+        np.arange(len(longer)) * 6, unit="h"
+    )
+    _, axes = argopal.plot_wind_timeline(longer, months=1)
+    assert len(axes) >= 2

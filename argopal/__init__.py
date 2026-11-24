@@ -172,6 +172,7 @@ from .plot import (
     plot_reference_timeseries,
     plot_wind,
     plot_wind_fit,
+    plot_wind_timeline,
     save_figure,
 )
 from .positions import attach_positions, read_positions
@@ -254,6 +255,7 @@ __all__ = [
     "plot_reference_timeseries",
     "plot_wind",
     "plot_wind_fit",
+    "plot_wind_timeline",
     "process_float",
     "read_ais",
     "read_ais_csv",

@@ -26,7 +26,7 @@ argopal.plot_wind(result["park"])  # wind speed, each model
 | profiles | `plot_profiles` |
 | β | `plot_beta` |
 | depth correction, spectral level | `plot_depth_correction` |
-| reference winds | `plot_reference_map`, `plot_reference_timeseries`, `plot_reference_fits`, `plot_wind_fit` |
+| reference winds | `plot_reference_map`, `plot_reference_timeseries`, `plot_reference_fits`, `plot_wind_fit`, `plot_wind_timeline` |
 | wind speed | `plot_wind` |
 
 ## Examples

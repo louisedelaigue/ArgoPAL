@@ -179,7 +179,7 @@ def average_to_reference(
         c
         for c in (
             ref_col, sigma_col, f"{reference}_latitude",
-            f"{reference}_longitude",
+            f"{reference}_longitude", f"{reference}_calibration",
         )
         if c in sub
     ]  # fmt: skip
@@ -224,8 +224,18 @@ def average_to_reference(
         level = out[spl].to_numpy(float)
         if f"U_{name}" in out:
             out[f"U_{name}"] = func(level, **COEFFICIENTS[name])
-        if f"U_{name}_fit" in out and name in fitted:
-            out[f"U_{name}_fit"] = func(level, **fitted[name])
+        if f"U_{name}_fit" in out and fitted.get(name):
+            by_group = fitted[name]
+            cal_col = f"{reference}_calibration"
+            group = (
+                out[cal_col].astype(object).to_numpy() if cal_col in out
+                else np.full(len(out), "all", dtype=object)
+            )  # fmt: skip
+            u = np.full(len(out), np.nan)
+            for g, c in by_group.items():
+                rows = group == g
+                u[rows] = func(level[rows], **c)
+            out[f"U_{name}_fit"] = u
     out.attrs = dict(pal.attrs)
     return out
 
@@ -366,6 +376,7 @@ def fit_wind_models(
     average=True,
     window="1h",
     min_footprint_r=None,
+    calibration="per_reference",
 ):
     """Refit the literature wind models to a collocated reference wind.
 
@@ -406,19 +417,33 @@ def fit_wind_models(
         reference (R at least this) rather than, or as well as, within
         `max_distance_km` (pass None for no distance limit).  Needs a
         collocation with `footprints=` (see `wind_footprints`).
+    calibration : {"per_reference", "pooled"}, optional
+        "per_reference" (default): one set of coefficients per reference,
+        fitted on the measurements selected for it (within its radius or
+        footprint).  Those measurements use their reference's
+        coefficients; every other measurement uses those of the closest
+        reference that has coefficients.  "pooled": one set of
+        coefficients fitted to all references together, used everywhere.
+        With a single reference, both are the same.
 
     Returns
     -------
     pal : pd.DataFrame
-        A copy with "U_<model>_fit" columns; `attrs["wind_fits"]` holds the
-        coefficients.
+        A copy with, for every measurement, "U_<model>_fit",
+        "<reference>_used" (True for the measurements compared with a
+        reference in the refit) and "<reference>_calibration" (the
+        reference whose coefficients it uses, "all" if pooled);
+        `attrs["wind_fits"]["coefficients"]` holds them, model ->
+        reference -> coefficients.
     fits : pd.DataFrame
-        One row per model: n points used (reference values, or
-        measurements if not averaged), n_measurements behind them,
-        published and refitted coefficients, and the skill of both on the
-        fitting points (rmse, r2, bias).
-        A model that could not be refitted (too few measurements) keeps
-        its row, with fitted None and NaN skill.
+        One row per model and reference ("all" if pooled): n points used
+        (reference values, or measurements if not averaged),
+        n_measurements behind them, n_applied (measurements using these
+        coefficients), published and refitted coefficients, and the skill
+        of both on the fitting points (rmse, r2, bias).  A reference whose
+        model could not be refitted (too few points) keeps its row, with
+        fitted None and NaN skill; its measurements use the closest
+        reference that has coefficients.
     """
     reference, ref_col = _reference_column(pal, reference)
     applied = pal.attrs.get("wind_models", {}).get("applied", {})
@@ -434,73 +459,175 @@ def fit_wind_models(
         min_footprint_r=min_footprint_r,
     )
     out = pal.copy()
+    # which measurements the refit uses: close enough to their reference
+    # (distance or footprint), with a reference value and a float level
+    used = _within(pal, reference, max_distance_km, min_footprint_r)
+    used &= pal[ref_col].notna().to_numpy()
+    levels = [
+        f"spl_{LITERATURE_MODELS[m][1]}Hz"
+        for m in models
+        if f"spl_{LITERATURE_MODELS[m][1]}Hz" in pal
+    ]
+    if levels:
+        used &= pal[levels].notna().any(axis=1).to_numpy()
+    if use is not None:
+        used &= np.asarray(use, dtype=bool)
+    out[f"{reference}_used"] = used
+    if calibration not in ("per_reference", "pooled"):
+        raise ValueError(
+            'calibration must be "per_reference" or "pooled"; '
+            f"got {calibration!r}."
+        )
+    name_col = f"{reference}_reference_name"
+    per_ref = calibration == "per_reference" and name_col in pts
+    group = (
+        pts[name_col].astype(str).to_numpy() if per_ref
+        else np.full(len(pts), "all", dtype=object)
+    )  # fmt: skip
+    groups = sorted(set(group)) if len(group) else []
     rows, coefs = [], {}
+    spl_of = {}
     for name in models:
         func, band, _ = LITERATURE_MODELS[name]
         spl_col = f"spl_{band}Hz"
         if spl_col not in pal:
             warnings.warn(f"{name}: {band} Hz not processed, not refitted.")
             continue
-        x = pts[spl_col].to_numpy(float)
-        y = pts[ref_col].to_numpy(float)
+        spl_of[name] = spl_col
+        x_all = pts[spl_col].to_numpy(float)
+        y_all = pts[ref_col].to_numpy(float)
         p0 = COEFFICIENTS[name]
-        lit = func(x, **p0)
-        sel = np.isfinite(x) & np.isfinite(y) & np.isfinite(lit)
-        info = {
-            "model": name,
-            "reference": reference,
-            "n": int(sel.sum()),
-            "n_measurements": int(pts["n_measurements"].to_numpy()[sel].sum()),
-            "published": p0,
-            "fitted": None,
-            **{f"{m}_{k}": np.nan for m in _FIT_METRICS for k in _FIT_STATS},
-        }
-        if sel.sum() <= len(p0):
-            warnings.warn(
-                f"{name}: too few collocations ({sel.sum()}) to fit."
-            )
+        coefs[name] = {}
+        for g in groups or ["all"]:
+            in_g = group == g
+            x, y = x_all[in_g], y_all[in_g]
+            lit = func(x, **p0)
+            sel = np.isfinite(x) & np.isfinite(y) & np.isfinite(lit)
+            n_meas = pts["n_measurements"].to_numpy()[in_g][sel].sum()
+            info = {
+                "model": name,
+                "reference": reference,
+                "reference_name": g,
+                "n": int(sel.sum()),
+                "n_measurements": int(n_meas),
+                "published": p0,
+                "fitted": None,
+                **{
+                    f"{m}_{k}": np.nan
+                    for m in _FIT_METRICS
+                    for k in _FIT_STATS
+                },
+            }
+            label = name if g == "all" else f"{name}, {g}"
+            if sel.sum() <= len(p0):
+                warnings.warn(
+                    f"{label}: too few collocations ({sel.sum()}) to fit."
+                )
+                rows.append(info)
+                continue
+            try:
+                popt = _refit(func, x[sel], y[sel], list(p0.values()))
+            except (RuntimeError, ValueError) as e:
+                warnings.warn(f"{label}: fit failed ({e}).")
+                rows.append(info)
+                continue
+            fitted = dict(zip(p0, map(float, popt)))
+            before = wind_metrics(lit[sel], y[sel])
+            after = wind_metrics(func(x[sel], **fitted), y[sel])
+            info["fitted"] = fitted
+            for m in _FIT_METRICS:
+                info[f"{m}_published"] = before[m]
+                info[f"{m}_fitted"] = after[m]
             rows.append(info)
+            coefs[name][g] = fitted
+
+    # which coefficients each measurement uses
+    fitted_any = sorted({g for c in coefs.values() for g in c})
+    cal = _calibration_of(out, reference, used, fitted_any, per_ref)
+    out[f"{reference}_calibration"] = cal
+    for name, by_group in coefs.items():
+        if not by_group:
             continue
-        try:
-            popt, _ = curve_fit(
-                lambda s, *p, f=func: f(s, *p),
-                x[sel],
-                y[sel],
-                p0=list(p0.values()),
-                maxfev=20000,
-            )
-        except (RuntimeError, ValueError) as e:
-            warnings.warn(f"{name}: fit failed ({e}).")
-            rows.append(info)
-            continue
-        fitted = dict(zip(p0, map(float, popt)))
-        out[f"U_{name}_fit"] = func(pal[spl_col].to_numpy(float), **fitted)
-        before = wind_metrics(lit[sel], y[sel])
-        after = wind_metrics(func(x[sel], **fitted), y[sel])
-        info["fitted"] = fitted
-        for m in _FIT_METRICS:
-            info[f"{m}_published"] = before[m]
-            info[f"{m}_fitted"] = after[m]
-        rows.append(info)
-        coefs[name] = fitted
+        func = LITERATURE_MODELS[name][0]
+        spl = out[spl_of[name]].to_numpy(float)
+        u = np.full(len(out), np.nan)
+        for g, c in by_group.items():
+            rows_g = (cal == g).to_numpy()
+            u[rows_g] = func(spl[rows_g], **c)
+        out[f"U_{name}_fit"] = u
+    for row in rows:
+        row["n_applied"] = int(
+            (cal == row["reference_name"]).sum()
+            if row["fitted"] is not None
+            else 0
+        )
     out.attrs = dict(pal.attrs)
-    out.attrs["wind_fits"] = {
+    settings = {
         "reference": reference,
+        "calibration": "per_reference" if per_ref else "pooled",
         "max_distance_km": max_distance_km,
         "average": average,
         "window": window,
         "min_footprint_r": min_footprint_r,
-        "coefficients": coefs,
     }
+    out.attrs["wind_fits"] = {**settings, "coefficients": coefs}
     fits = pd.DataFrame(rows)
-    fits.attrs = {
-        "reference": reference,
-        "max_distance_km": max_distance_km,
-        "average": average,
-        "window": window,
-        "min_footprint_r": min_footprint_r,
-    }
+    fits.attrs = dict(settings)
     return out, fits
+
+
+def _calibration_of(pal, reference, used, groups, per_ref):
+    """The reference whose coefficients each measurement uses: its own
+    reference where it was used in the refit, else the closest reference
+    with coefficients ("all" when pooled)."""
+    cal = pd.Series(None, index=pal.index, dtype=object)
+    if not groups:
+        return cal
+    if not per_ref:
+        cal[:] = "all"
+        return cal
+    name_col = f"{reference}_reference_name"
+    positions = (
+        pal.attrs.get("references", {}).get(reference, {}).get("positions", {})
+    )
+    known = [
+        g for g in groups if positions.get(g, {}).get("latitude") is not None
+    ]
+    if known:
+        lat = pal["latitude"].to_numpy(float)
+        lon = pal["longitude"].to_numpy(float)
+        dist = np.stack(
+            [
+                _haversine(
+                    lat,
+                    lon,
+                    positions[g]["latitude"],
+                    positions[g]["longitude"],
+                )
+                for g in known
+            ]
+        )
+        ok = np.isfinite(dist).any(axis=0)
+        nearest = np.where(
+            ok, np.asarray(known, dtype=object)[np.nanargmin(
+                np.where(np.isfinite(dist), dist, np.inf), axis=0
+            )], None,
+        )  # fmt: skip
+        cal[:] = nearest
+    own = pal[name_col].astype(object) if name_col in pal else None
+    if own is not None:
+        mine = used & own.isin(groups).to_numpy()
+        cal[mine] = own[mine]
+    return cal
+
+
+def _haversine(lat1, lon1, lat2, lon2):
+    p1, p2 = np.radians(lat1), np.radians(lat2)
+    a = (
+        np.sin((p2 - p1) / 2) ** 2
+        + np.cos(p1) * np.cos(p2) * np.sin(np.radians(lon2 - lon1) / 2) ** 2
+    )
+    return 2 * 6371.0088 * np.arcsin(np.sqrt(a))
 
 
 def flag_ship_deviation(
@@ -671,7 +798,10 @@ def wind_uncertainty(
     per reference value, the mean of the measurements matched to it
     (`average_to_reference`), so σ is the error of the wind on the
     reference's time scale (e.g. an hourly mean against an hourly buoy
-    wind); single measurements scatter more.
+    wind); single measurements scatter more.  With one set of coefficients
+    per reference (`fit_wind_models(calibration="per_reference")`), each
+    reference's terms come from its own points and apply to the
+    measurements that use its coefficients.
 
     Three terms, each a column, and their combination:
 
@@ -726,8 +856,9 @@ def wind_uncertainty(
     pal : pd.DataFrame
         A copy with the four sigma columns per model.
     bins : pd.DataFrame
-        The wind-dependent empirical σ: model, wind (bin mean), sigma_cv,
-        n, lo, hi.
+        The wind-dependent empirical σ: model, reference_name (the
+        reference whose coefficients, "all" if pooled), wind (bin mean),
+        sigma_cv, n, lo, hi.
     """
     fits = pal.attrs.get("wind_fits")
     if not fits or not fits.get("coefficients"):
@@ -753,6 +884,14 @@ def wind_uncertainty(
     rng = np.random.default_rng(seed)
     cycles_all = pts["cycle"].to_numpy()
     y = pts[ref_col].to_numpy(float)
+    cal_col = f"{reference}_calibration"
+
+    def groups_of(table):
+        if cal_col in table:
+            return table[cal_col].astype(object).to_numpy()
+        return np.full(len(table), "all", dtype=object)
+
+    pt_group, row_group = groups_of(pts), groups_of(pal)
     out = pal.copy()
     tables, info = [], {}
     for name in models:
@@ -760,78 +899,90 @@ def wind_uncertainty(
         x_all = pal[f"spl_{band}Hz"].to_numpy(float)
         u_fit = pal[f"U_{name}_fit"].to_numpy(float)
         x = pts[f"spl_{band}Hz"].to_numpy(float)
-        p0 = list(fits["coefficients"][name].values())
-        sel = np.isfinite(x) & np.isfinite(y)
-        cycles = pd.unique(cycles_all[sel])
-        sigma_ref = _reference_sigma(pts, sel, reference_sigma, sigma_col)
         sigma_cv = np.full(len(pal), np.nan)
         sigma_coef = np.full(len(pal), np.nan)
-        if len(cycles) < 3:
-            warnings.warn(
-                f"{name}: collocations in only {len(cycles)} cycle(s); "
-                "at least 3 are needed for cross-validation and bootstrap."
-            )
-        else:
-            # leave-one-cycle-out residuals
-            resid = np.full(len(pts), np.nan)
-            pred_cv = np.full(len(pts), np.nan)
-            for c in cycles:
-                test = sel & (cycles_all == c)
-                train = sel & (cycles_all != c)
-                try:
-                    popt = _refit(func, x[train], y[train], p0)
-                except (RuntimeError, ValueError):
-                    continue
-                pred_cv[test] = func(x[test], *popt)
-                resid[test] = pred_cv[test] - y[test]
-            bins = _binned_rmse(pred_cv, resid, bin_width, min_per_bin)
-            if len(bins):
-                sigma_cv = np.interp(
-                    u_fit, bins["wind"].to_numpy(), bins["sigma_cv"].to_numpy()
-                )
-                sigma_cv[~np.isfinite(u_fit)] = np.nan
-                tables.append(bins.assign(model=name))
-            # bootstrap over whole cycles
-            if len(cycles) < MIN_BOOTSTRAP_CYCLES:
-                warnings.warn(
-                    f"{name}: bootstrap over only {len(cycles)} cycles; the "
-                    "coefficient uncertainty is unreliable (and large) with "
-                    f"fewer than {MIN_BOOTSTRAP_CYCLES}."
-                )
-            rows_by_cycle = {
-                c: np.flatnonzero(sel & (cycles_all == c)) for c in cycles
-            }
+        sigma_ref_rows = np.full(len(pal), np.nan)
+        info[name] = {}
+        for g, coef in fits["coefficients"][name].items():
+            label = name if g == "all" else f"{name}, {g}"
+            p0 = list(coef.values())
+            rows = row_group == g  # measurements using these coefficients
+            sel = np.isfinite(x) & np.isfinite(y) & (pt_group == g)
+            cycles = pd.unique(cycles_all[sel])
+            sigma_ref = _reference_sigma(pts, sel, reference_sigma, sigma_col)
+            sigma_ref_rows[rows] = sigma_ref
             preds = []
-            for _ in range(n_bootstrap):
-                pick = rng.choice(cycles, size=len(cycles), replace=True)
-                idx = np.concatenate([rows_by_cycle[c] for c in pick])
-                try:
-                    popt = _refit(func, x[idx], y[idx], p0)
-                except (RuntimeError, ValueError):
-                    continue
-                preds.append(func(x_all, *popt))
-            if len(preds) > 1:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", RuntimeWarning)
-                    sigma_coef = np.nanstd(np.array(preds), axis=0, ddof=1)
+            if len(cycles) < 3:
+                warnings.warn(
+                    f"{label}: collocations in only {len(cycles)} cycle(s); "
+                    "at least 3 are needed for cross-validation and "
+                    "bootstrap."
+                )
+            else:
+                # leave-one-cycle-out residuals
+                resid = np.full(len(pts), np.nan)
+                pred_cv = np.full(len(pts), np.nan)
+                for c in cycles:
+                    test = sel & (cycles_all == c)
+                    train = sel & (cycles_all != c)
+                    try:
+                        popt = _refit(func, x[train], y[train], p0)
+                    except (RuntimeError, ValueError):
+                        continue
+                    pred_cv[test] = func(x[test], *popt)
+                    resid[test] = pred_cv[test] - y[test]
+                bins = _binned_rmse(pred_cv, resid, bin_width, min_per_bin)
+                if len(bins):
+                    sigma_cv[rows] = np.interp(
+                        u_fit[rows],
+                        bins["wind"].to_numpy(),
+                        bins["sigma_cv"].to_numpy(),
+                    )
+                    tables.append(bins.assign(model=name, reference_name=g))
+                # bootstrap over whole cycles
+                if len(cycles) < MIN_BOOTSTRAP_CYCLES:
+                    warnings.warn(
+                        f"{label}: bootstrap over only {len(cycles)} cycles; "
+                        "the coefficient uncertainty is unreliable (and "
+                        f"large) with fewer than {MIN_BOOTSTRAP_CYCLES}."
+                    )
+                rows_by_cycle = {
+                    c: np.flatnonzero(sel & (cycles_all == c)) for c in cycles
+                }
+                for _ in range(n_bootstrap):
+                    pick = rng.choice(cycles, size=len(cycles), replace=True)
+                    idx = np.concatenate([rows_by_cycle[c] for c in pick])
+                    try:
+                        popt = _refit(func, x[idx], y[idx], p0)
+                    except (RuntimeError, ValueError):
+                        continue
+                    preds.append(func(x_all[rows], *popt))
+                if len(preds) > 1:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)
+                        sigma_coef[rows] = np.nanstd(
+                            np.array(preds), axis=0, ddof=1
+                        )
+            info[name][g] = {
+                "sigma_ref": sigma_ref,
+                "n_cycles": len(cycles),
+                "n_points": int(sel.sum()),
+                "n_applied": int(rows.sum()),
+                "n_bootstrap_ok": len(preds),
+                "fitted_spl_range": (
+                    [float(np.nanmin(x[sel])), float(np.nanmax(x[sel]))]
+                    if sel.any()
+                    else None
+                ),
+            }
+        sigma_cv[~np.isfinite(u_fit)] = np.nan
+        sigma_coef[~np.isfinite(u_fit)] = np.nan
+        sigma_ref_rows[~np.isfinite(u_fit)] = np.nan
         out[f"U_{name}_fit_sigma_cv"] = sigma_cv
         out[f"U_{name}_fit_sigma_coef"] = sigma_coef
-        out[f"U_{name}_fit_sigma_ref"] = np.where(
-            np.isfinite(u_fit), sigma_ref, np.nan
-        )
-        empirical = np.clip(sigma_cv**2 - sigma_ref**2, 0, None)
+        out[f"U_{name}_fit_sigma_ref"] = sigma_ref_rows
+        empirical = np.clip(sigma_cv**2 - sigma_ref_rows**2, 0, None)
         out[f"U_{name}_fit_sigma"] = np.sqrt(empirical + sigma_coef**2)
-        info[name] = {
-            "sigma_ref": sigma_ref,
-            "n_cycles": len(cycles),
-            "n_points": int(sel.sum()),
-            "n_bootstrap_ok": len(preds) if len(cycles) >= 3 else 0,
-            "fitted_spl_range": (
-                [float(np.nanmin(x[sel])), float(np.nanmax(x[sel]))]
-                if sel.any()
-                else None
-            ),
-        }
     out.attrs = dict(pal.attrs)
     out.attrs["wind_uncertainty"] = {
         "reference": reference,
@@ -845,14 +996,11 @@ def wind_uncertainty(
         "min_per_bin": min_per_bin,
         "models": info,
     }
+    cols = ["model", "reference_name", "wind", "sigma_cv", "n", "lo", "hi"]
     table = (
-        pd.concat(tables, ignore_index=True)[
-            ["model", "wind", "sigma_cv", "n", "lo", "hi"]
-        ]
+        pd.concat(tables, ignore_index=True)[cols]
         if tables
-        else pd.DataFrame(
-            columns=["model", "wind", "sigma_cv", "n", "lo", "hi"]
-        )
+        else pd.DataFrame(columns=cols)
     )
     return out, table
 

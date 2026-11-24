@@ -48,7 +48,9 @@ def test_four_columns_and_bins():
     p, bins = argopal.wind_uncertainty(_float())
     for suffix in ("_cv", "_coef", "_ref", ""):
         assert f"U_nystuen2015_fit_sigma{suffix}" in p
-    assert set(bins.columns) == {"model", "wind", "sigma_cv", "n", "lo", "hi"}
+    assert set(bins.columns) == {
+        "model", "reference_name", "wind", "sigma_cv", "n", "lo", "hi",
+    }  # fmt: skip
     assert (bins["n"] >= 30).all()
 
 
@@ -73,7 +75,7 @@ def test_coefficient_sigma_small_inside_large_outside_fitted_range():
     q = p.copy()
     q.loc[0, "spl_8000Hz"] = 75.0
     q.loc[0, "U_nystuen2015_fit"] = argopal.wind_nystuen2015(
-        75.0, **q.attrs["wind_fits"]["coefficients"]["nystuen2015"]
+        75.0, **q.attrs["wind_fits"]["coefficients"]["nystuen2015"]["all"]
     )
     q, _ = argopal.wind_uncertainty(q)
     assert q.loc[0, "U_nystuen2015_fit_sigma_coef"] > 5 * inside

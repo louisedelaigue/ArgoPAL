@@ -15,6 +15,7 @@ are coloured by date (viridis).  Pass ``annotate=True`` to add a title and
 notes (float, data mode, what was skipped and why).
 """
 
+import itertools
 import os
 from contextlib import contextmanager
 
@@ -562,6 +563,18 @@ def plot_positions(park_table, positions, annotate=False):
     return fig, ax
 
 
+def _reference_colours(park_table, reference):
+    """One colour per reference (red is kept for highlighted points), the
+    same in every figure: in the order of the references' names."""
+    info = park_table.attrs.get("references", {}).get(reference, {})
+    names = sorted(info.get("positions", {}))
+    palette = [
+        c for c in plt.get_cmap("tab10").colors
+        if c != mpl.colors.to_rgb("tab:red")
+    ]  # fmt: skip
+    return {n: palette[k % len(palette)] for k, n in enumerate(names)}
+
+
 def _has_float_wind(park_table, p):
     """True where the float has a wind (or spectral level) to compare."""
     applied = park_table.attrs.get("wind_models", {}).get("applied", {})
@@ -765,13 +778,8 @@ def plot_reference_map(
                 -np.inf,
             )  # fmt: skip
             best, top = r_all.argmax(axis=0), r_all.max(axis=0)
-            palette = [
-                c for c in plt.get_cmap("tab10").colors
-                if c != mpl.colors.to_rgb("tab:red")
-            ]  # fmt: skip
-            colour_of = {
-                n: palette[k % len(palette)] for k, n in enumerate(shown)
-            }
+            every = _reference_colours(park_table, reference)
+            colour_of = {n: every[n] for n in shown if n in every}
             colour_of.update({n: BEFORE for n in unused})
             for name, col in colour_of.items():
                 if name not in fp_names:
@@ -1632,6 +1640,178 @@ def plot_reference_fits(
     return fig, ax
 
 
+def plot_wind_timeline(
+    park_table,
+    model="nystuen2015",
+    reference=None,
+    months=2,
+    uncertainty=True,
+    annotate=False,
+):
+    """The float wind through the whole deployment, a few months per row.
+
+    Hourly means of the wind from one model, refitted (±1σ) and
+    published, with the reference wind where the float was matched to one.
+    Periods when the float was used to refit the model are shaded in the
+    colour of the reference it was compared with; the strip along the top
+    of each row shows whose coefficients the float wind uses (with one
+    calibration per reference, the closest reference outside those
+    periods).
+
+    Parameters
+    ----------
+    park_table : pd.DataFrame
+        PAL table after `wind_literature` (and `collocate_reference`,
+        `fit_wind_models`, `wind_uncertainty` for the rest).
+    model : str, optional
+        Wind model, by default "nystuen2015".
+    reference : str, optional
+        By default the one used for fitting.
+    months : int, optional
+        Months per row, by default 2.
+    uncertainty : bool, optional
+        Shade ±1σ around the refitted wind if computed, by default True.
+    annotate : bool, optional
+        Add a title and a note.
+
+    Returns
+    -------
+    fig, axes
+    """
+    pub_col, fit_col = f"U_{model}", f"U_{model}_fit"
+    if pub_col not in park_table:
+        raise KeyError(f"No {pub_col!r}: run wind_literature first.")
+    fits = park_table.attrs.get("wind_fits", {})
+    if reference is None:
+        reference = fits.get("reference") or next(
+            iter(park_table.attrs.get("references", {})), None
+        )
+    ref_col = f"U_{reference}" if reference else None
+    used_col = f"{reference}_used" if reference else None
+    cal_col = f"{reference}_calibration" if reference else None
+    sig_col = f"{fit_col}_sigma"
+    p = park_table.dropna(subset=["datetime"]).set_index("datetime")
+    numeric = [
+        c for c in (pub_col, fit_col, sig_col, ref_col)
+        if c is not None and c in p
+    ]  # fmt: skip
+    hourly = p[numeric].resample("1h").mean()
+    for col in (used_col, cal_col):
+        if col is not None and col in p:
+            hourly[col] = (
+                p[col]
+                .resample("1h")
+                .agg(lambda s: s.mode().iloc[0] if s.notna().any() else None)
+            )
+    applied = park_table.attrs.get("wind_models", {}).get("applied", {})
+    label = applied.get(model, {}).get("reference", model)
+    colour = plt.get_cmap("viridis")(_WIND_SHADES.get(model, 0.3))
+    colours = _reference_colours(park_table, reference) if reference else {}
+    start = hourly.index.min().to_period("M").to_timestamp()
+    end = hourly.index.max()
+    edges = list(pd.date_range(start, end, freq=f"{months}MS"))
+    if edges[-1] < end:
+        edges.append(edges[-1] + pd.DateOffset(months=months))
+    top = np.nanmax(hourly[numeric].to_numpy(float)) if numeric else 1
+    # only rows with something to show
+    has = hourly[numeric].notna().any(axis=1)
+    pairs = [
+        (a, b) for a, b in itertools.pairwise(edges)
+        if has[(hourly.index >= a) & (hourly.index < b)].any()
+    ]  # fmt: skip
+
+    def runs(mask):
+        """(start, end) of the runs of True in a boolean hourly series."""
+        m = mask.fillna(False).astype(bool).to_numpy()
+        idx = mask.index
+        out, i = [], 0
+        while i < len(m):
+            if m[i]:
+                j = i
+                while j + 1 < len(m) and m[j + 1]:
+                    j += 1
+                out.append((idx[i], idx[j] + pd.Timedelta("1h")))
+                i = j + 1
+            else:
+                i += 1
+        return out
+
+    with _style():
+        nrow = len(pairs)
+        fig, axes = plt.subplots(
+            nrow, 1, figsize=(13, 2.8 * nrow + 0.6), sharey=True,
+            layout="constrained", squeeze=False,
+        )  # fmt: skip
+        axes = list(axes[:, 0])
+        seen = set()
+        for ax, (t0, t1) in zip(axes, pairs):
+            h = hourly[(hourly.index >= t0) & (hourly.index < t1)]
+            # periods used for the refit, in the reference's colour
+            if used_col in h and cal_col in h:
+                for name, col in colours.items():
+                    m = h[used_col].fillna(False).astype(bool) & (
+                        h[cal_col] == name
+                    )
+                    for a, b in runs(m):
+                        ax.axvspan(a, b, color=col, alpha=0.18, lw=0,
+                                   zorder=0)  # fmt: skip
+            # whose coefficients the wind uses, along the top (where there
+            # is a float wind)
+            if cal_col in h:
+                for name, col in colours.items():
+                    m = (h[cal_col] == name) & h[pub_col].notna()
+                    for a, b in runs(m):
+                        ax.axvspan(
+                            a, b, ymin=0.96, ymax=1, color=col, lw=0,
+                            zorder=1,
+                        )  # fmt: skip
+            if uncertainty and fit_col in h and sig_col in h:
+                ax.fill_between(
+                    h.index, (h[fit_col] - h[sig_col]).clip(lower=0),
+                    h[fit_col] + h[sig_col], color=colour, alpha=0.2, lw=0,
+                    label=f"{label}, refitted ±1σ",
+                )  # fmt: skip
+            if ref_col in h:
+                ax.plot(h.index, h[ref_col], color=AFTER, lw=0.9,
+                        label=_reference_label(park_table, reference)
+                        + " (reference)")  # fmt: skip
+            ax.plot(h.index, h[pub_col], color=BEFORE, lw=0.9, ls="--",
+                    label=f"{label}, published")  # fmt: skip
+            if fit_col in h:
+                ax.plot(h.index, h[fit_col], color=colour, lw=1.1,
+                        label=f"{label}, refitted")  # fmt: skip
+            ax.set_xlim(t0, t1)
+            ax.set_ylim(0, np.ceil(top * 1.08))
+            ax.set_ylabel("Wind speed (m s$^{-1}$)")
+            locator = mdates.AutoDateLocator(maxticks=12)
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+            if cal_col in h:
+                seen.update(h[cal_col].dropna().unique())
+        handles, labels = axes[0].get_legend_handles_labels()
+        for name, col in colours.items():
+            if name in seen:
+                handles.append(mpl.patches.Patch(color=col, alpha=0.5))
+                labels.append(f"{name}: used for refit (shaded), "
+                              "coefficients (top strip)")  # fmt: skip
+        axes[0].legend(handles, labels, loc="upper left", fontsize=7,
+                       ncol=3)  # fmt: skip
+        _panel_labels(axes)
+        if annotate:
+            how = fits.get("calibration")
+            note = "Hourly means.  " + (
+                "One calibration per reference: outside the shaded "
+                "periods, the coefficients of the closest reference."
+                if how == "per_reference"
+                else "One calibration for all references."
+                if how == "pooled"
+                else "Not refitted."
+            )
+            _annotate(fig, f"{_wmo(park_table)}{label} through the deployment",
+                      note)  # fmt: skip
+    return fig, axes
+
+
 def plot_ais(park_table, band=None, annotate=False):
     """Ship-noise check: (a) the band level, with the measurements that had
     a ship nearby; (b) the number of ships nearby through the deployment.
@@ -1763,6 +1943,7 @@ def plot_all(
         figs["reference_timeseries"] = plot_reference_timeseries(
             result["park"], **a
         )[0]
+        figs["wind_timeline"] = plot_wind_timeline(result["park"], **a)[0]
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
         for name, fig in figs.items():
