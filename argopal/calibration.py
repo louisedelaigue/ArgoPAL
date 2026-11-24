@@ -158,7 +158,14 @@ def average_to_reference(
     name_col = f"{reference}_reference_name"
     sigma_col = f"{reference}_sigma"
     # values of the reference itself, not averaged over measurements
-    ref_cols = [c for c in (ref_col, sigma_col) if c in sub]
+    ref_cols = [
+        c
+        for c in (
+            ref_col, sigma_col, f"{reference}_latitude",
+            f"{reference}_longitude",
+        )
+        if c in sub
+    ]  # fmt: skip
     keys = [c for c in (name_col, time_col) if c in sub]
     numeric = [
         c

@@ -364,7 +364,7 @@ md("""
 The same points through time: the buoy wind, and Nystuen et al. (2015)
 with its published and refitted coefficients.  Each point belongs to the
 buoy the float was matched to, the closest one with a value within the
-hour, so one panel per buoy:
+hour, so one row per buoy:
 """)
 
 code("""

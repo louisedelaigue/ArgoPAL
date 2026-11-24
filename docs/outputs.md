@@ -94,6 +94,7 @@ Values come from the chosen data mode only (`mode=`): with
 | `<name>_distance_km` | km | distance between the float and that reference |
 | `<name>_dt_min` | min | reference time minus measurement time |
 | `<name>_time` | UTC | time of the reference value used |
+| `<name>_latitude`, `<name>_longitude` | °N, °E | position of the reference value used |
 | `<name>_reference_name` | | reference used (if the table names its references) |
 | `<name>_sigma` | m s⁻¹ | error of the reference value (if the table gives `wind_speed_sigma`) |
 | `U_<model>_fit` | m s⁻¹ | wind speed from the refitted model, for every measurement |

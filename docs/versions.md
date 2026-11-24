@@ -26,7 +26,14 @@
   frequent one, and how far the others are).
 - `plot_reference_timeseries`: the reference wind and the float wind
   (published and refitted model) against time, for the points used in the
-  refit, one panel per reference (also in `plot_all` after a refit).
+  refit, one row per reference (also in `plot_all` after a refit).
+- `plot_reference_map` and `plot_reference_timeseries` show only the
+  measurements used in the refit: within the radius and with a float wind
+  (not, e.g., after the delayed-mode data end).  Circles are drawn at the
+  positions of the reference values used (several for a buoy reported at
+  several positions).
+- `collocate_reference` adds `<name>_latitude` and `<name>_longitude`, the
+  position of the reference value used.
 - Maps use cartopy, with land and labelled gridlines (`map_axes`, used by
   `plot_positions` and the tutorials); cartopy is now a dependency.
 - Tutorials: "Finding PAL floats and processing several" and

@@ -169,7 +169,8 @@ def collocate_reference(
     pd.DataFrame
         A copy of `pal` with "U_<name>" (m s-1), "<name>_distance_km",
         "<name>_dt_min" (reference time minus measurement time, minutes),
-        "<name>_time" (time of the reference value used),
+        "<name>_time", "<name>_latitude", "<name>_longitude" (time and
+        position of the reference value used),
         "<name>_reference_name" if the table names its references, and
         "<name>_sigma" (m s-1) if it gives their error.  `attrs
         ["references"][<name>]["positions"]` records where each reference
@@ -202,6 +203,8 @@ def collocate_reference(
     best_dist = np.full(n, np.inf)
     best_dt = np.full(n, np.nan)
     best_t = np.full(n, np.datetime64("NaT", "ns"))
+    best_lat = np.full(n, np.nan)
+    best_lon = np.full(n, np.nan)
     best_u = np.full(n, np.nan)
     best_sigma = np.full(n, np.nan)
     best_name = np.full(n, None, dtype=object)
@@ -215,10 +218,9 @@ def collocate_reference(
         else:
             it = np.zeros(n, dtype=int)
         dt = (tr[it] - t).astype("timedelta64[s]").astype(float) / 60
-        dist = _haversine_km(
-            lat, lon, g["latitude"].to_numpy(float)[it],
-            g["longitude"].to_numpy(float)[it],
-        )  # fmt: skip
+        rlat = g["latitude"].to_numpy(float)[it]
+        rlon = g["longitude"].to_numpy(float)[it]
+        dist = _haversine_km(lat, lon, rlat, rlon)
         ok = np.abs(dt) <= tol_min
         closer = ok & (
             (dist < best_dist)
@@ -227,6 +229,8 @@ def collocate_reference(
         best_dist = np.where(closer, dist, best_dist)
         best_dt = np.where(closer, dt, best_dt)
         best_t = np.where(closer, tr[it], best_t)
+        best_lat = np.where(closer, rlat, best_lat)
+        best_lon = np.where(closer, rlon, best_lon)
         best_u = np.where(closer, g["wind_speed"].to_numpy(float)[it], best_u)
         if has_sigma:
             sig = g["wind_speed_sigma"].to_numpy(float)[it]
@@ -242,6 +246,8 @@ def collocate_reference(
     out[f"{name}_distance_km"] = best_dist
     out[f"{name}_dt_min"] = best_dt
     out[f"{name}_time"] = best_t
+    out[f"{name}_latitude"] = best_lat
+    out[f"{name}_longitude"] = best_lon
     if named:
         out[f"{name}_reference_name"] = best_name
     if has_sigma:

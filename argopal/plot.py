@@ -562,17 +562,67 @@ def plot_positions(park_table, positions, annotate=False):
     return fig, ax
 
 
+def _used_measurements(park_table, reference, radius_km):
+    """Measurements compared with the reference when refitting: within
+    `radius_km` of the reference value matched to them, and with a float
+    wind (or spectral level) to compare."""
+    p = park_table.dropna(subset=["latitude", "longitude"])
+    dist = p.get(f"{reference}_distance_km")
+    if dist is None:
+        return p.iloc[:0]
+    ok = (dist <= radius_km) & p[f"U_{reference}"].notna()
+    applied = park_table.attrs.get("wind_models", {}).get("applied", {})
+    winds = [f"U_{m}" for m in applied if f"U_{m}" in p]
+    if not winds:
+        winds = [c for c in p if c.startswith("spl_")]
+    if winds:
+        ok &= p[winds].notna().any(axis=1)
+    return p[ok]
+
+
+def _station_positions(used, reference, name, fallback, merge_km=2.0):
+    """Positions of a reference for the values actually used: one if
+    they are all within `merge_km`, else one per group of nearby
+    positions (a buoy reported at several positions)."""
+    lat_c, lon_c = f"{reference}_latitude", f"{reference}_longitude"
+    if lat_c not in used or used.empty:
+        return [(fallback["latitude"], fallback["longitude"])]
+    pos = used[[lat_c, lon_c]].dropna().round(3)
+    counts = pos.value_counts()
+    groups = []  # [lat, lon, n]
+    for (la, lo), n in counts.items():
+        for g in groups:
+            if _km(la, lo, g[0], g[1]) <= merge_km:
+                g[2] += n
+                break
+        else:
+            groups.append([la, lo, n])
+    groups.sort(key=lambda g: -g[2])
+    return [(g[0], g[1]) for g in groups]
+
+
+def _km(lat1, lon1, lat2, lon2):
+    p1, p2 = np.radians(lat1), np.radians(lat2)
+    a = (
+        np.sin((p2 - p1) / 2) ** 2
+        + np.cos(p1) * np.cos(p2) * np.sin(np.radians(lon2 - lon1) / 2) ** 2
+    )
+    return 2 * 6371.0088 * np.arcsin(np.sqrt(a))
+
+
 def plot_reference_map(
     park_table, reference=None, radius_km=None, annotate=False
 ):
     """Map of the float's trajectory and of the references used to refit
     the wind models.
 
-    The trajectory (grey), with the measurements within `radius_km` of
-    the reference they were matched to (black: those used to refit the
-    wind models), and each reference used (triangle), i.e. with at least
-    one of those measurements, with a circle of that radius around it.
-    References in the table that the float never came close to are not
+    The trajectory (grey), with the measurements used to refit the wind
+    models (black): within `radius_km` of the reference value matched to
+    them, and with a float wind.  Each reference used is drawn
+    (triangle) at the positions of the values used, with a circle of
+    that radius around each: a buoy reported at several positions gets
+    several circles.  References the float never came close to, or only
+    without a float wind (e.g. after the delayed-mode data end), are not
     shown.
 
     Parameters
@@ -584,7 +634,7 @@ def plot_reference_map(
         Name given to `collocate_reference`; by default the one used for
         fitting, or the only one.
     radius_km : float, optional
-        Radius of the circles and of the highlighted measurements; by
+        Radius of the circles and of the measurements shown as used; by
         default the one used by `fit_wind_models`, else 40 km.
     annotate : bool, optional
         Add a title and notes, by default False.
@@ -613,21 +663,18 @@ def plot_reference_map(
         radius_km = 40.0 if radius_km is None else radius_km
     pc = ccrs.PlateCarree()
     p = park_table.dropna(subset=["latitude", "longitude"])
-    dist = p.get(f"{reference}_distance_km")
-    near = (
-        p[(dist <= radius_km) & p[f"U_{reference}"].notna()]
-        if dist is not None
-        else p.iloc[:0]
-    )
-    # only the references used: those with measurements within the radius
+    used = _used_measurements(park_table, reference, radius_km)
     name_col = f"{reference}_reference_name"
-    if name_col in near:
-        used = set(near[name_col].dropna().astype(str))
-    else:  # a single reference, used if any measurement is close enough
-        used = set(stations) if len(near) else set()
-    stations = {k: v for k, v in stations.items() if k in used}
-    slon = [v["longitude"] for v in stations.values()]
-    slat = [v["latitude"] for v in stations.values()]
+    shown = {}  # name -> list of (lat, lon)
+    for name, v in stations.items():
+        if name_col in used:
+            mine = used[used[name_col].astype(str) == name]
+        else:  # a single reference
+            mine = used
+        if len(mine):
+            shown[name] = _station_positions(mine, reference, name, v)
+    slat = [la for pos in shown.values() for la, _ in pos]
+    slon = [lo for pos in shown.values() for _, lo in pos]
     with _style():
         fig, ax = map_axes(
             np.concatenate([p["longitude"], slon]),
@@ -638,62 +685,55 @@ def plot_reference_map(
             label="Float trajectory", transform=pc, zorder=2,
         )  # fmt: skip
         ax.plot(
-            near["longitude"], near["latitude"], ls="none", marker=".",
+            used["longitude"], used["latitude"], ls="none", marker=".",
             ms=3, color=AFTER, transform=pc, zorder=3,
-            label=f"Within {radius_km:g} km of a reference",
+            label=f"Used for fitting (within {radius_km:g} km)",
         )  # fmt: skip
         geod = Geodesic()
-        for i, (name, v) in enumerate(stations.items()):
-            ring = np.asarray(
-                geod.circle(v["longitude"], v["latitude"], radius_km * 1e3)
-            )
-            ax.plot(
-                np.append(ring[:, 0], ring[0, 0]),
-                np.append(ring[:, 1], ring[0, 1]),
-                color="tab:red", ls="--", lw=0.8, transform=pc, zorder=3,
-            )  # fmt: skip
-            ax.plot(
-                v["longitude"], v["latitude"], ls="none", marker="^", ms=9,
-                color="tab:red", mec="white", mew=0.8, transform=pc,
-                zorder=5,
-                label="Reference used for fitting" if i == 0 else None,
-            )  # fmt: skip
+        first = True
+        for name, positions in shown.items():
+            for k, (la, lo) in enumerate(positions):
+                ring = np.asarray(geod.circle(lo, la, radius_km * 1e3))
+                ax.plot(
+                    np.append(ring[:, 0], ring[0, 0]),
+                    np.append(ring[:, 1], ring[0, 1]),
+                    color="tab:red", ls="--" if k == 0 else ":", lw=0.8,
+                    transform=pc, zorder=3,
+                )  # fmt: skip
+                ax.plot(
+                    lo, la, ls="none", marker="^", ms=9 if k == 0 else 6,
+                    color="tab:red", mec="white", mew=0.8, transform=pc,
+                    zorder=5,
+                    label="Reference used for fitting" if first else None,
+                )  # fmt: skip
+                first = False
+            la, lo = positions[0]
             ax.annotate(
-                name, (v["longitude"], v["latitude"]), xytext=(7, 4),
+                name, (lo, la), xytext=(7, 4),
                 xycoords=pc._as_mpl_transform(ax),
                 textcoords="offset points", fontsize=9, fontweight="bold",
                 zorder=6,
             )  # fmt: skip
-        first = p.iloc[0] if len(p) else None
-        if first is not None:
+        if len(p):
             ax.annotate(
-                "START", (first["longitude"], first["latitude"]),
-                xytext=(6, 6), xycoords=pc._as_mpl_transform(ax),
+                "START", (p["longitude"].iloc[0], p["latitude"].iloc[0]),
+                xytext=(6, -12), xycoords=pc._as_mpl_transform(ax),
                 textcoords="offset points", fontsize=8, zorder=6,
             )  # fmt: skip
         ax.legend(loc="best")
         if annotate:
-            spread = {
-                k: v["spread_km"] for k, v in stations.items()
-                if (v.get("spread_km") or 0) > 1
-            }  # fmt: skip
+            several = [k for k, v in shown.items() if len(v) > 1]
             note = (
-                f"{len(near)} of {len(p)} measurements within "
-                f"{radius_km:g} km of their reference"
-                + (
-                    f" ({', '.join(stations)})."
-                    if stations
-                    else "; no reference used."
-                )
+                f"{len(used)} of {len(p)} measurements used for fitting, "
+                f"within {radius_km:g} km of "
+                + (", ".join(shown) if shown else "no reference")
+                + "."
             )
-            if spread:
+            if several:
                 note += (
-                    " Reported at several positions: "
-                    + ", ".join(
-                        f"{k} (up to {d:g} km apart)"
-                        for k, d in spread.items()
-                    )
-                    + "; shown at the most frequent."
+                    " Reported at several positions (one circle each): "
+                    + ", ".join(several)
+                    + "."
                 )
             _annotate(fig, f"{_wmo(park_table)}float and references", note)
     return fig, ax
@@ -1217,9 +1257,10 @@ def plot_reference_timeseries(
 
     The points are those compared with the reference when fitting: the
     measurements within `radius_km` of the reference they were matched to
-    (the closest one with a value in time), averaged around each reference
-    value (`average_to_reference`).  One panel per reference, as the float
-    is near each at different times.
+    (the closest one with a value in time) and with a float wind (none,
+    e.g., after the delayed-mode data end), averaged around each reference
+    value (`average_to_reference`).  One row per reference, each over its
+    own period, as the float is near each at different times.
 
     Parameters
     ----------
@@ -1266,10 +1307,13 @@ def plot_reference_timeseries(
     pts = average_to_reference(
         park_table, reference, radius_km, average=average, window=window
     )
-    pts = pts.dropna(subset=[ref_col, "datetime"])
+    # only points with a float wind: those compared in the refit (e.g. not
+    # after the delayed-mode data end)
+    pts = pts.dropna(subset=[ref_col, "datetime", pub_col])
     if pts.empty:
         raise ValueError(
-            f"No measurement within {radius_km:g} km of the reference."
+            f"No measurement within {radius_km:g} km of the reference "
+            "with a float wind."
         )
     name_col = f"{reference}_reference_name"
     groups = (
@@ -1282,16 +1326,11 @@ def plot_reference_timeseries(
     colour = plt.get_cmap("viridis")(_WIND_SHADES.get(model, 0.3))
     gap = pd.Timedelta(gap)
     with _style():
-        widths = [
-            max((g["datetime"].max() - g["datetime"].min()).days, 1)
-            for _, g in groups
-        ]
         fig, axes = plt.subplots(
-            1, len(groups), figsize=(12, 4.5), sharey=True,
-            layout="constrained", squeeze=False,
-            gridspec_kw={"width_ratios": widths},
+            len(groups), 1, figsize=(12, 3.2 * len(groups) + 0.5),
+            sharey=True, layout="constrained", squeeze=False,
         )  # fmt: skip
-        axes = list(axes[0])
+        axes = list(axes[:, 0])
         for ax, (name, g) in zip(axes, groups):
             g = g.sort_values("datetime")
             series = [
@@ -1308,12 +1347,11 @@ def plot_reference_timeseries(
                 f"{name}: {len(g)} points, {d.min():.0f}–{d.max():.0f} km",
                 fontsize=10,
             )
-            ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=5))
-            ax.xaxis.set_major_formatter(
-                mdates.ConciseDateFormatter(ax.xaxis.get_major_locator())
-            )
-            ax.legend(loc="upper left", fontsize=8)
-        axes[0].set_ylabel("Wind speed (m s$^{-1}$)")
+            locator = mdates.AutoDateLocator(maxticks=10)
+            ax.xaxis.set_major_locator(locator)
+            ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+            ax.set_ylabel("Wind speed (m s$^{-1}$)")
+            ax.legend(loc="upper left", fontsize=8, ncol=3)
         cols = [c for c in (ref_col, pub_col, fit_col) if c in pts]
         top = np.nanmax(pts[cols].to_numpy(float))
         axes[0].set_ylim(0, np.ceil(top * 1.05))

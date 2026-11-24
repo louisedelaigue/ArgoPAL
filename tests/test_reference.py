@@ -679,3 +679,22 @@ def test_reference_timeseries_one_panel_per_reference():
     _, axes = argopal.plot_reference_timeseries(out)
     # B first (it is used first in time), then A
     assert [ax.get_title().split(":")[0] for ax in axes] == ["B", "A"]
+
+
+def test_reference_plots_leave_out_measurements_without_float_wind():
+    # two measurements near buoy A, the second without a float wind (e.g.
+    # after the delayed-mode data end): only the first is used
+    pal = _pal([T0 + pd.Timedelta("10min"), T0 + pd.Timedelta("4h10min")])
+    pal["spl_8000Hz"] = [50.0, np.nan]  # no depth correction: no level
+    pal["U_nystuen2015"] = [5.0, np.nan]
+    pal.attrs["wind_models"] = {
+        "applied": {"nystuen2015": {"band_hz": 8000, "reference": "N"}}
+    }
+    out = argopal.collocate_reference(pal, _several_references(), name="b")
+    assert out["b_latitude"].iloc[0] == pytest.approx(43.38)
+    _, ax = argopal.plot_reference_map(out, radius_km=40)
+    used = next(ln for ln in ax.lines if "Used for fitting" in ln.get_label())
+    assert len(used.get_xdata()) == 1
+    _, axes = argopal.plot_reference_timeseries(out, radius_km=40)
+    assert len(axes) == 1
+    assert np.isfinite(axes[0].lines[0].get_ydata()).sum() == 1
