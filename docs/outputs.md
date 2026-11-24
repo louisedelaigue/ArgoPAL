@@ -39,8 +39,18 @@ and units (e.g. `TEMP` in °C, `PSAL` on the practical salinity scale,
 One row per PAL measurement during the park drift (measurement code 290),
 after cleaning.  This is the table to use for wind speed.
 
-**Measurement**
+The columns most used:
 
+| column | unit | description |
+|---|---|---|
+| `datetime`, `latitude`, `longitude` | UTC, °N, °E | when and where |
+| `spl_8000Hz` | dB re 1 µPa² Hz⁻¹ | depth-corrected spectral level at 8 kHz |
+| `U_<model>` | m s⁻¹ | wind speed, published model |
+| `U_<model>_fit`, `U_<model>_fit_sigma` | m s⁻¹ | with a reference: refitted wind and its 1σ |
+
+Every column, by group:
+
+:::{dropdown} Measurement
 | column | unit | description |
 |---|---|---|
 | `cycle` | | float cycle number |
@@ -49,9 +59,9 @@ after cleaning.  This is the table to use for wind speed.
 | `pressure` | dbar | pressure at the measurement |
 | `spectrum_qc` | | Argo QC flag of the spectrum |
 | `variance_class_1` … `variance_class_4` | | PAL classification of the variability of four bands, as sent by the float (NaN if not sent) |
+:::
 
-**Acoustics**
-
+:::{dropdown} Acoustics
 | column | unit | description |
 |---|---|---|
 | `f_<f>Hz` | dB re 1 µPa | band level, as sent by the float, after QC and despiking; only the bands chosen with `bands=` |
@@ -60,9 +70,10 @@ after cleaning.  This is the table to use for wind speed.
 | `beta_cycle_before`, `beta_cycle_after` | | the two profiles β was interpolated between (per-profile β only) |
 | `beta_weight_after` | 0–1 | time weight of the later profile |
 | `spl_<f>Hz` | dB re 1 µPa² Hz⁻¹ | depth-corrected spectral level: band level + β, minus the bandwidth term if the float did not normalise on board |
+:::
 
-**Park CTD/BGC data** (one set per variable; which variables depends on
-the float, or on `variables=`)
+:::{dropdown} Park CTD/BGC data
+One set per variable: all that the float measured, or those in `variables=`.
 
 | column | description |
 |---|---|
@@ -72,22 +83,22 @@ the float, or on `variables=`)
 
 Values come from the chosen data mode only (`mode=`): with
 `mode="delayed"`, a variable without delayed-mode values is NaN.
+:::
 
-**Position**
-
+:::{dropdown} Position
 | column | unit | description |
 |---|---|---|
 | `latitude`, `longitude` | °N, °E | position interpolated along the great circle between the surface fixes before and after the measurement |
 | `position_gap_h` | h | time between those two fixes: the longer, the less certain the position |
+:::
 
-**Wind speed** (published coefficients)
-
+:::{dropdown} Wind speed, published models
 | column | unit | description |
 |---|---|---|
 | `U_vagle1990`, `U_nystuen2015`, `U_pensieri2015` | m s⁻¹ | wind speed from `spl_8000Hz`; NaN where the model is not defined |
+:::
 
-**Reference wind** (with `reference=`)
-
+:::{dropdown} Reference wind and refitted wind (with `reference=`)
 | column | unit | description |
 |---|---|---|
 | `U_<name>` | m s⁻¹ | reference wind matched to the measurement: from the closest reference with a value within 1 h |
@@ -110,16 +121,16 @@ By default the models are fitted on one point per reference value, the
 average of the measurements within ±30 min of its time
 (`reference_window="1h"`), so σ is the error of the wind on the
 reference's time scale, e.g. an hourly mean.  See
-[Wind speed](wind.md).
+[How it works](method.md#calibration-against-reference-winds).
+:::
 
-**Ship noise** (with `ais=`)
-
+:::{dropdown} Ship noise (with `ais=`)
 | column | description |
 |---|---|
 | `ships_nearby` | number of vessels within 20 km and ±30 min; NaN where the AIS feed received nothing |
 | `ship_flag` | True if at least one vessel was nearby |
 | `ship_contaminated` | with a reference too: a ship nearby **and** a refitted wind error larger than the RMSE |
-
+:::
 ## pal_raw
 
 The PAL table as read from the `Rtraj_aux` file, before any cleaning:

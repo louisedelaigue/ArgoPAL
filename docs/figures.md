@@ -1,82 +1,81 @@
 # Figures
 
-Every step has a figure showing what it did (before → after, which data
-were used).  Each function returns `(fig, axes)`:
+Each step has a figure showing what it did.  `plot_all` makes all of
+them, and each function returns `(fig, axes)`:
 
 ```python
-figs = argopal.plot_all(result, save_dir="figures")  # all of them, saved at 300 dpi
-argopal.save_figure(figs["beta"], "beta.png")        # one figure, 300 dpi
-argopal.plot_all(result, annotate=True)              # + titles and notes (mode, what was skipped)
-
-argopal.plot_pal_spectra(result["park"])  # band levels + median spectrum
-argopal.plot_despike(result["pal_raw"], result["park"], band=8000, cycle=3)
-argopal.plot_park(result["park"], result["park_samples"], cycle=3)
-argopal.plot_positions(result["park"], result["positions"])
-argopal.plot_profiles(result["ts_profiles"])  # T/S profiles used for β
-argopal.plot_beta(result["beta"], band=8000)  # β vs depth, β through time
-argopal.plot_depth_correction(result["park"], beta=result["beta"])
-argopal.plot_wind(result["park"])  # wind speed, each model
+figs = argopal.plot_all(result, save_dir="figures")  # saved at 300 dpi
+argopal.plot_wind(result["park"])                    # one figure
+argopal.save_figure(fig, "wind.png")                 # 300 dpi
 ```
 
-| step | figure |
+`annotate=True` adds titles and notes (data mode, what was skipped).
+
+| step | function |
 |---|---|
-| read / clean | `plot_pal_spectra`, `plot_despike` |
+| read and clean | `plot_pal_spectra`, `plot_despike` |
 | park data | `plot_park` |
 | positions | `plot_positions` |
-| profiles | `plot_profiles` |
-| β | `plot_beta` |
-| depth correction, spectral level | `plot_depth_correction` |
-| reference winds | `plot_reference_map`, `plot_reference_timeseries`, `plot_reference_fits`, `plot_wind_fit`, `plot_wind_timeline` |
+| depth correction | `plot_profiles`, `plot_beta`, `plot_depth_correction` |
 | wind speed | `plot_wind` |
+| reference winds | `plot_reference_map`, `plot_reference_timeseries`, `plot_wind_fit`, `plot_wind_timeline`, `plot_reference_fits` |
+| ship noise | `plot_ais` |
 
 ## Examples
 
-Float 7902280 with the default settings (delayed mode, 8 kHz).
+Float 7902280, default settings (delayed mode, 8 kHz).  The reference
+wind figures are in the
+[wind speed tutorial](tutorials/argopal_tutorial.ipynb).
 
-### PAL spectra
+::::{grid} 1 1 2 2
+:gutter: 3
 
+:::{grid-item-card} PAL spectra: `plot_pal_spectra`
 ```{image} img/spectra.png
 :alt: Band levels and median spectrum
 ```
+:::
 
-### Despiking
-
+:::{grid-item-card} Despiking: `plot_despike`
 ```{image} img/despike.png
 :alt: 8 kHz level before and after despiking
 ```
+:::
 
-### Park data
-
+:::{grid-item-card} Park data: `plot_park`
 ```{image} img/park.png
 :alt: Park temperature, salinity and oxygen
 ```
+:::
 
-### Positions
-
+:::{grid-item-card} Positions: `plot_positions`
 ```{image} img/positions.png
 :alt: Float track and PAL measurement positions
 ```
+:::
 
-### Profiles used for the depth correction
-
+:::{grid-item-card} Profiles used for β: `plot_profiles`
 ```{image} img/profiles.png
 :alt: Temperature and salinity profiles
 ```
+:::
 
-### β
-
+:::{grid-item-card} β: `plot_beta`
 ```{image} img/beta.png
 :alt: β against depth, and β at 1000 m through time
 ```
+:::
 
-### Depth correction
-
+:::{grid-item-card} Depth correction: `plot_depth_correction`
 ```{image} img/depth_correction.png
 :alt: Band level and depth-corrected spectral level
 ```
+:::
 
-### Wind speed
-
+:::{grid-item-card} Wind speed: `plot_wind`
 ```{image} img/wind.png
 :alt: Wind speed from the published models
 ```
+:::
+
+::::

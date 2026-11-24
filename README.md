@@ -64,10 +64,11 @@ Everything else is in the documentation, [argopal.readthedocs.io](https://argopa
   band, no further processing),
   [from PAL data to wind speed](https://argopal.readthedocs.io/en/latest/tutorials/argopal_tutorial.html),
   [understanding the depth correction](https://argopal.readthedocs.io/en/latest/tutorials/depth_correction_tutorial.html);
-- the user guide: [data from the Argo GDAC](https://argopal.readthedocs.io/en/latest/data.html),
-  [processing a float](https://argopal.readthedocs.io/en/latest/processing.html),
-  [outputs](https://argopal.readthedocs.io/en/latest/outputs.html), [wind speed](https://argopal.readthedocs.io/en/latest/wind.html),
-  [ship noise (AIS)](https://argopal.readthedocs.io/en/latest/ais.html), [figures](https://argopal.readthedocs.io/en/latest/figures.html);
+- the user guide: [quick start](https://argopal.readthedocs.io/en/latest/quickstart.html),
+  [options](https://argopal.readthedocs.io/en/latest/options.html),
+  [outputs](https://argopal.readthedocs.io/en/latest/outputs.html),
+  [how it works](https://argopal.readthedocs.io/en/latest/method.html),
+  [figures](https://argopal.readthedocs.io/en/latest/figures.html);
 - the [API reference](https://argopal.readthedocs.io/en/latest/api.html) and the
   [version history](https://argopal.readthedocs.io/en/latest/versions.html).
 
@@ -115,7 +116,7 @@ maintained by Louise Delaigue.
 
 ## Citation
 
-If you use ArgoPAL, please cite the software:
+Work using ArgoPAL should cite the software:
 
 > Delaigue, L. (2026). ArgoPAL: wind speed from passive acoustics on
 > BGC-Argo floats (version 0.1.0b1).

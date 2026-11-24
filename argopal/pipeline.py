@@ -92,9 +92,10 @@ def process_float(
       8. `wind_literature`: wind speed U_<model> from the published
          models at 8 kHz (Vagle 1990, Nystuen 2015, Pensieri 2015);
       9. (if `reference` is given) `collocate_reference`, then
-         `fit_wind_models` (refitted models U_<model>_fit, within 40 km of
-         the reference), `wind_skill` and `wind_uncertainty` (σ per
-         measurement: cross-validated, coefficient, reference, combined); with `ais` too,
+         `fit_wind_models` (refitted models U_<model>_fit, one calibration
+         per reference, on the data within 40 km of it), `wind_skill` and
+         `wind_uncertainty` (σ per measurement: cross-validated by
+         default; coefficient and reference terms optional); with `ais` too,
          `flag_ship_deviation` (ship nearby and wind error > RMSE).
 
     Any of the returned tables can be written with `export`, as can the
@@ -179,12 +180,14 @@ def process_float(
         "per_reference" (default): the wind models are refitted to each
         reference separately, on the measurements selected for it (within
         `fit_max_distance_km`, or inside its footprint); every other
-        measurement uses the coefficients of the closest reference.
+        measurement uses the coefficients of the closest reference, and
+        gets no refitted wind if that reference has none.
         "pooled": one set of coefficients for all references, used
         everywhere.  See `fit_wind_models`.
     calibration_min_cycles : int, optional
-        Float cycles a reference needs to get its own coefficients, by
-        default 4; below, its measurements use the closest reference's.
+        Float cycles (with a float level) a reference needs to get
+        coefficients, by default 4.  The measurements closest to a
+        reference without coefficients get no refitted wind.
     footprints : str, xr.Dataset or xr.DataArray, optional
         Select the measurements compared with each reference by wind
         footprint instead of distance: a reanalysis wind (file(s) or

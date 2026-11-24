@@ -49,6 +49,7 @@ docs = [
     "myst-nb",
     "sphinx",
     "sphinx-copybutton",
+    "sphinx-design",
 ]
 
 [tool.setuptools.packages.find]
