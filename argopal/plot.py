@@ -562,6 +562,17 @@ def plot_positions(park_table, positions, annotate=False):
     return fig, ax
 
 
+def _has_float_wind(park_table, p):
+    """True where the float has a wind (or spectral level) to compare."""
+    applied = park_table.attrs.get("wind_models", {}).get("applied", {})
+    winds = [f"U_{m}" for m in applied if f"U_{m}" in p]
+    if not winds:
+        winds = [c for c in p if c.startswith("spl_")]
+    if not winds:
+        return pd.Series(True, index=p.index)
+    return p[winds].notna().any(axis=1)
+
+
 def _used_measurements(park_table, reference, radius_km):
     """Measurements compared with the reference when refitting: within
     `radius_km` of the reference value matched to them, and with a float
@@ -571,13 +582,7 @@ def _used_measurements(park_table, reference, radius_km):
     if dist is None:
         return p.iloc[:0]
     ok = (dist <= radius_km) & p[f"U_{reference}"].notna()
-    applied = park_table.attrs.get("wind_models", {}).get("applied", {})
-    winds = [f"U_{m}" for m in applied if f"U_{m}" in p]
-    if not winds:
-        winds = [c for c in p if c.startswith("spl_")]
-    if winds:
-        ok &= p[winds].notna().any(axis=1)
-    return p[ok]
+    return p[ok & _has_float_wind(park_table, p)]
 
 
 def _station_positions(used, reference, name, fallback, merge_km=2.0):
@@ -616,14 +621,15 @@ def plot_reference_map(
     """Map of the float's trajectory and of the references used to refit
     the wind models.
 
-    The trajectory (grey), with the measurements used to refit the wind
-    models (black): within `radius_km` of the reference value matched to
-    them, and with a float wind.  Each reference used is drawn
-    (triangle) at the positions of the values used, with a circle of
-    that radius around each: a buoy reported at several positions gets
-    several circles.  References the float never came close to, or only
-    without a float wind (e.g. after the delayed-mode data end), are not
-    shown.
+    The trajectory, black where the float has a wind and grey where it
+    has none (e.g. no delayed-mode profiles yet, so no depth
+    correction), with the measurements used to refit the wind models
+    (red): within `radius_km` of the reference value matched to them,
+    and with a float wind.  Each reference used is drawn (red triangle) at
+    the positions of the values used, with a circle of that radius around
+    each (several for a buoy reported at several positions).  References
+    the float came within `radius_km` of only without a float wind are
+    greyed out; those it never came close to are not shown.
 
     Parameters
     ----------
@@ -663,64 +669,101 @@ def plot_reference_map(
         radius_km = 40.0 if radius_km is None else radius_km
     pc = ccrs.PlateCarree()
     p = park_table.dropna(subset=["latitude", "longitude"])
+    wind = _has_float_wind(park_table, p)
     used = _used_measurements(park_table, reference, radius_km)
+    dist = p.get(f"{reference}_distance_km")
+    near = (
+        p[(dist <= radius_km) & p[f"U_{reference}"].notna()]
+        if dist is not None
+        else p.iloc[:0]
+    )
     name_col = f"{reference}_reference_name"
-    shown = {}  # name -> list of (lat, lon)
+
+    def of(table, name):
+        if name_col in table:
+            return table[table[name_col].astype(str) == name]
+        return table  # a single reference
+
+    # references used for fitting, and references the float came close to
+    # only without a float wind (e.g. before the delayed-mode data exist)
+    shown, unused = {}, {}
     for name, v in stations.items():
-        if name_col in used:
-            mine = used[used[name_col].astype(str) == name]
-        else:  # a single reference
-            mine = used
+        mine = of(used, name)
         if len(mine):
             shown[name] = _station_positions(mine, reference, name, v)
-    slat = [la for pos in shown.values() for la, _ in pos]
-    slon = [lo for pos in shown.values() for _, lo in pos]
+        elif len(of(near, name)):
+            unused[name] = _station_positions(
+                of(near, name), reference, name, v
+            )
+    every = list(shown.values()) + list(unused.values())
+    slat = [la for pos in every for la, _ in pos]
+    slon = [lo for pos in every for _, lo in pos]
+    mode = park_table.attrs.get("depth_correction", {}).get("mode")
     with _style():
         fig, ax = map_axes(
             np.concatenate([p["longitude"], slon]),
             np.concatenate([p["latitude"], slat]),
         )
+        # trajectory: black with a float wind, grey without
+        lon, lat = p["longitude"].to_numpy(), p["latitude"].to_numpy()
+        has = wind.to_numpy()
         ax.plot(
-            p["longitude"], p["latitude"], color=BEFORE, lw=1.2,
-            label="Float trajectory", transform=pc, zorder=2,
+            np.where(has, lon, np.nan), np.where(has, lat, np.nan),
+            color=AFTER, lw=1.2, transform=pc, zorder=2,
+            label="Trajectory with float wind"
+            + (f" ({mode} mode)" if mode else ""),
         )  # fmt: skip
+        if (~has).any():
+            # draw the grey part with its neighbours so that it joins up
+            edge = ~has | np.r_[False, ~has[:-1]] | np.r_[~has[1:], False]
+            ax.plot(
+                np.where(edge, lon, np.nan), np.where(edge, lat, np.nan),
+                color=BEFORE, lw=1.2, transform=pc, zorder=1.9,
+                label="Trajectory without float wind"
+                + (f" (no {mode}-mode profiles)" if mode else ""),
+            )  # fmt: skip
         ax.plot(
             used["longitude"], used["latitude"], ls="none", marker=".",
-            ms=3, color=AFTER, transform=pc, zorder=3,
+            ms=3, color="tab:red", transform=pc, zorder=3,
             label=f"Used for fitting (within {radius_km:g} km)",
         )  # fmt: skip
         geod = Geodesic()
-        first = True
-        for name, positions in shown.items():
-            for k, (la, lo) in enumerate(positions):
-                ring = np.asarray(geod.circle(lo, la, radius_km * 1e3))
-                ax.plot(
-                    np.append(ring[:, 0], ring[0, 0]),
-                    np.append(ring[:, 1], ring[0, 1]),
-                    color="tab:red", ls="--" if k == 0 else ":", lw=0.8,
-                    transform=pc, zorder=3,
+        labelled = set()
+        for group, colour, label in (
+            (shown, "tab:red", "Reference used for fitting"),
+            (unused, BEFORE, "Reference not used (no float wind)"),
+        ):
+            for name, positions in group.items():
+                for k, (la, lo) in enumerate(positions):
+                    ring = np.asarray(geod.circle(lo, la, radius_km * 1e3))
+                    ax.plot(
+                        np.append(ring[:, 0], ring[0, 0]),
+                        np.append(ring[:, 1], ring[0, 1]),
+                        color=colour, ls="--" if k == 0 else ":", lw=0.8,
+                        transform=pc, zorder=3,
+                    )  # fmt: skip
+                    ax.plot(
+                        lo, la, ls="none", marker="^",
+                        ms=9 if k == 0 else 6, color=colour, mec="white",
+                        mew=0.8, transform=pc, zorder=5,
+                        label=None if label in labelled else label,
+                    )  # fmt: skip
+                    labelled.add(label)
+                la, lo = positions[0]
+                ax.annotate(
+                    name, (lo, la), xytext=(7, 4),
+                    xycoords=pc._as_mpl_transform(ax),
+                    textcoords="offset points", fontsize=9,
+                    fontweight="bold", color=AFTER if colour != BEFORE
+                    else BEFORE, zorder=6,
                 )  # fmt: skip
-                ax.plot(
-                    lo, la, ls="none", marker="^", ms=9 if k == 0 else 6,
-                    color="tab:red", mec="white", mew=0.8, transform=pc,
-                    zorder=5,
-                    label="Reference used for fitting" if first else None,
-                )  # fmt: skip
-                first = False
-            la, lo = positions[0]
-            ax.annotate(
-                name, (lo, la), xytext=(7, 4),
-                xycoords=pc._as_mpl_transform(ax),
-                textcoords="offset points", fontsize=9, fontweight="bold",
-                zorder=6,
-            )  # fmt: skip
         if len(p):
             ax.annotate(
                 "START", (p["longitude"].iloc[0], p["latitude"].iloc[0]),
                 xytext=(6, -12), xycoords=pc._as_mpl_transform(ax),
                 textcoords="offset points", fontsize=8, zorder=6,
             )  # fmt: skip
-        ax.legend(loc="best")
+        ax.legend(loc="best", fontsize=8)
         if annotate:
             several = [k for k, v in shown.items() if len(v) > 1]
             note = (
@@ -729,6 +772,12 @@ def plot_reference_map(
                 + (", ".join(shown) if shown else "no reference")
                 + "."
             )
+            if unused:
+                note += (
+                    " Passed without a float wind, not used: "
+                    + ", ".join(unused)
+                    + "."
+                )
             if several:
                 note += (
                     " Reported at several positions (one circle each): "

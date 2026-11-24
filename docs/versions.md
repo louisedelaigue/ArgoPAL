@@ -31,7 +31,10 @@
   measurements used in the refit: within the radius and with a float wind
   (not, e.g., after the delayed-mode data end).  Circles are drawn at the
   positions of the reference values used (several for a buoy reported at
-  several positions).
+  several positions).  On the map, the trajectory is black where
+  the float has a wind and grey where it has none (e.g. no delayed-mode
+  profiles yet), and references passed only without a float wind are
+  greyed out.
 - `collocate_reference` adds `<name>_latitude` and `<name>_longitude`, the
   position of the reference value used.
 - Maps use cartopy, with land and labelled gridlines (`map_axes`, used by

@@ -695,6 +695,30 @@ def test_reference_plots_leave_out_measurements_without_float_wind():
     _, ax = argopal.plot_reference_map(out, radius_km=40)
     used = next(ln for ln in ax.lines if "Used for fitting" in ln.get_label())
     assert len(used.get_xdata()) == 1
+    labels = [ln.get_label() for ln in ax.lines]
+    assert any(x.startswith("Trajectory with float wind") for x in labels)
+    assert any(x.startswith("Trajectory without float wind") for x in labels)
     _, axes = argopal.plot_reference_timeseries(out, radius_km=40)
     assert len(axes) == 1
     assert np.isfinite(axes[0].lines[0].get_ydata()).sum() == 1
+
+
+def test_reference_map_greys_out_buoys_passed_without_float_wind():
+    # near A with a float wind, then near B only without one
+    pal = _pal(
+        [T0 + pd.Timedelta("10min"), T0 + pd.Timedelta("30min")],
+        lat=[43.38, 43.38 + 30 / 111.2],
+    )
+    pal["spl_8000Hz"] = [50.0, np.nan]
+    pal["U_nystuen2015"] = [5.0, np.nan]
+    pal.attrs["wind_models"] = {
+        "applied": {"nystuen2015": {"band_hz": 8000, "reference": "N"}}
+    }
+    out = argopal.collocate_reference(pal, _several_references(), name="b")
+    assert list(out["b_reference_name"]) == ["A", "B"]
+    _, ax = argopal.plot_reference_map(out, radius_km=10, annotate=True)
+    labels = [ln.get_label() for ln in ax.lines]
+    assert "Reference used for fitting" in labels
+    assert "Reference not used (no float wind)" in labels
+    colours = {t.get_text(): t.get_color() for t in ax.texts}
+    assert colours["B"] != colours["A"]  # B greyed out

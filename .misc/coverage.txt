@@ -15,11 +15,11 @@ argopal/fetch.py            12      1    92%
 argopal/gdac.py             95     10    89%
 argopal/meta.py              6      0   100%
 argopal/pipeline.py         61      3    95%
-argopal/plot.py            631     61    90%
+argopal/plot.py            650     62    90%
 argopal/positions.py        52      0   100%
 argopal/read.py            107      5    95%
 argopal/reference.py       127      1    99%
 argopal/search.py           84      6    93%
 argopal/wind.py             42      0   100%
 --------------------------------------------
-TOTAL                     2493    126    95%
+TOTAL                     2512    127    95%
