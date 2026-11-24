@@ -1332,6 +1332,7 @@ def plot_reference_timeseries(
     average=None,
     window=None,
     gap="3h",
+    uncertainty=True,
     annotate=False,
 ):
     """Wind against time where the float is near a reference: the
@@ -1363,6 +1364,10 @@ def plot_reference_timeseries(
     gap : str, optional
         Lines are broken where points are further apart in time, by
         default "3h".
+    uncertainty : bool, optional
+        Shade ±1σ around the refitted wind (the combined uncertainty,
+        "U_<model>_fit_sigma", see `wind_uncertainty`), if computed; by
+        default True.
     annotate : bool, optional
         Add a title and notes, by default False.
 
@@ -1428,6 +1433,18 @@ def plot_reference_timeseries(
             ]
             if fit_col in g:
                 series.append((fit_col, colour, "-", f"{label}, refitted"))
+            sig_col = f"{fit_col}_sigma"
+            if uncertainty and fit_col in g and sig_col in g:
+                t, lo = _break_gaps(
+                    g["datetime"], g[fit_col] - g[sig_col], gap
+                )
+                _, hi = _break_gaps(
+                    g["datetime"], g[fit_col] + g[sig_col], gap
+                )
+                ax.fill_between(
+                    t, lo.clip(lower=0), hi, color=colour, alpha=0.2,
+                    lw=0, label=f"{label}, refitted ±1σ",
+                )  # fmt: skip
             for col, c, ls, lab in series:
                 t, y = _break_gaps(g["datetime"], g[col], gap)
                 ax.plot(t, y, color=c, ls=ls, lw=1.2, label=lab)
@@ -1440,7 +1457,14 @@ def plot_reference_timeseries(
             ax.xaxis.set_major_locator(locator)
             ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
             ax.set_ylabel("Wind speed (m s$^{-1}$)")
-            ax.legend(loc="upper left", fontsize=8, ncol=3)
+            handles, labels = ax.get_legend_handles_labels()
+            order = sorted(
+                range(len(labels)), key=lambda i: "±1σ" in labels[i]
+            )  # the shading last
+            ax.legend(
+                [handles[i] for i in order], [labels[i] for i in order],
+                loc="upper left", fontsize=8, ncol=4,
+            )  # fmt: skip
         cols = [c for c in (ref_col, pub_col, fit_col) if c in pts]
         top = np.nanmax(pts[cols].to_numpy(float))
         axes[0].set_ylim(0, np.ceil(top * 1.05))

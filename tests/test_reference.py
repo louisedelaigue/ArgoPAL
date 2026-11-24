@@ -661,6 +661,15 @@ def test_reference_timeseries():
     _, axes = argopal.plot_reference_timeseries(fitted, annotate=True)
     labels = [ln.get_label() for ln in axes[0].lines]
     assert "Nystuen et al. (2015), refitted" in labels
+    # ±1σ shading once the uncertainty is computed
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with_sigma, _ = argopal.wind_uncertainty(fitted, n_bootstrap=5)
+    _, axes = argopal.plot_reference_timeseries(with_sigma)
+    legend = [t.get_text() for t in axes[0].get_legend().get_texts()]
+    assert legend[-1] == "Nystuen et al. (2015), refitted ±1σ"
+    _, axes = argopal.plot_reference_timeseries(with_sigma, uncertainty=False)
+    assert not axes[0].collections
     # one point per hourly buoy value, as in the fit
     n_points = len(argopal.average_to_reference(fitted))
     ref_line = axes[0].lines[0]

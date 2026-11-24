@@ -42,7 +42,8 @@
   their anemometer height (3.5 m) and are converted to 10 m.
 - `plot_reference_timeseries`: the reference wind and the float wind
   (published and refitted model) against time, for the points used in the
-  refit, one row per reference (also in `plot_all` after a refit).
+  refit, one row per reference, with ±1σ around the refitted wind (also
+  in `plot_all` after a refit).
 - `plot_reference_map` and `plot_reference_timeseries` show only the
   measurements used in the refit: within the radius and with a float wind
   (not, e.g., after the delayed-mode data end).  Circles are drawn at the
