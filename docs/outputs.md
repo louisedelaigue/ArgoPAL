@@ -102,9 +102,9 @@ Values come from the chosen data mode only (`mode=`): with
 | `<name>_calibration` | | the reference whose coefficients the measurement's refitted wind uses: `<name>_closest` if that reference has coefficients, empty otherwise (no refitted wind); "all" if pooled |
 | `U_<model>_fit` | m s⁻¹ | wind speed from the refitted model, for every measurement, with the coefficients of `<name>_calibration` |
 | `U_<model>_fit_sigma_cv` | m s⁻¹ | empirical error (leave-one-cycle-out), depends on wind speed |
-| `U_<model>_fit_sigma_coef` | m s⁻¹ | uncertainty from the fitted coefficients (bootstrap over cycles) |
-| `U_<model>_fit_sigma_ref` | m s⁻¹ | the reference's own error |
-| `U_<model>_fit_sigma` | m s⁻¹ | combined: √(max(σ_cv² − σ_ref², 0) + σ_coef²) |
+| `U_<model>_fit_sigma_coef` | m s⁻¹ | optional ("coef"): uncertainty from the fitted coefficients (bootstrap over cycles) |
+| `U_<model>_fit_sigma_ref` | m s⁻¹ | optional ("ref"): the reference's own error |
+| `U_<model>_fit_sigma` | m s⁻¹ | combined from the terms computed: σ_cv by default, √(max(σ_cv² − σ_ref², 0) + σ_coef²) with all three |
 
 By default the models are fitted on one point per reference value, the
 average of the measurements within ±30 min of its time
@@ -238,7 +238,7 @@ park.attrs["clean"]             # measurements removed, and why
 park.attrs["spl"]               # whether the bandwidth term was subtracted
 park.attrs["depth_correction"]  # method, profiles used, extrapolation limit
 park.attrs["wind_fits"]         # reference, radius, averaging, coefficients
-park.attrs["wind_uncertainty"]  # σ_ref, bootstrap, cycles and points per model
+park.attrs["wind_uncertainty"]  # terms computed, σ_ref, bootstrap, cycles, points
 ```
 
 ## Exported files

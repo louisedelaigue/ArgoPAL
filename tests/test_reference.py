@@ -208,9 +208,9 @@ def test_uncertainty_uses_table_sigma():
     out, _ = argopal.fit_wind_models(pal, max_distance_km=None)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5, components="all")
         given, _ = argopal.wind_uncertainty(
-            out, n_bootstrap=5, reference_sigma=1
+            out, n_bootstrap=5, reference_sigma=1, components="all"
         )
     # one calibration per buoy: each buoy's measurements get its own sigma
     by_buoy = q.groupby("buoy_calibration")["U_nystuen2015_fit_sigma_ref"]
@@ -222,7 +222,9 @@ def test_uncertainty_uses_table_sigma():
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        qp, _ = argopal.wind_uncertainty(pooled, n_bootstrap=5)
+        qp, _ = argopal.wind_uncertainty(
+            pooled, n_bootstrap=5, components="all"
+        )
     rms = np.sqrt((0.3**2 + 0.4**2) / 2)
     assert qp["U_nystuen2015_fit_sigma_ref"].dropna().unique() == (
         pytest.approx(rms)
@@ -302,7 +304,7 @@ def test_window_carried_from_fit_to_skill_and_uncertainty():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         out, fits = argopal.fit_wind_models(pal, window="20min")
-        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5, components="all")
     assert out.attrs["wind_fits"]["window"] == "20min"
     pts20 = argopal.average_to_reference(pal, window="20min")
     n20 = len(pts20)
@@ -348,7 +350,7 @@ def test_fit_and_skill_on_averaged_points():
     assert single["n"].iloc[0] == pal["U_buoy"].notna().sum()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+        q, _ = argopal.wind_uncertainty(out, n_bootstrap=5, components="all")
     info = q.attrs["wind_uncertainty"]["models"]["nystuen2015"]["all"]
     assert info["n_points"] == n_hours
     assert q["U_nystuen2015_fit_sigma"].notna().sum() == len(pal)
@@ -580,7 +582,11 @@ def test_pipeline_with_several_references_in_one_file(offline, tmp_path):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         r = argopal.process_float(
-            7902280, mode="raw", reference=str(path), n_bootstrap=5
+            7902280,
+            mode="raw",
+            reference=str(path),
+            n_bootstrap=5,
+            uncertainty=["cv", "ref"],
         )
     p = r["park"]
     assert set(p["ref_reference_name"].dropna()) == {"near"}
@@ -871,7 +877,9 @@ def test_uncertainty_per_reference():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         out, _ = argopal.fit_wind_models(pal, models=["nystuen2015"])
-        q, bins = argopal.wind_uncertainty(out, n_bootstrap=5)
+        q, bins = argopal.wind_uncertainty(
+            out, n_bootstrap=5, components="all"
+        )
     models = q.attrs["wind_uncertainty"]["models"]["nystuen2015"]
     assert set(models) == {"A", "B"}
     assert models["A"]["n_applied"] + models["B"]["n_applied"] == len(q)
@@ -889,7 +897,7 @@ def test_wind_timeline():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         out, _ = argopal.fit_wind_models(pal, models=["nystuen2015"])
-        out, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+        out, _ = argopal.wind_uncertainty(out, n_bootstrap=5, components="all")
     _, axes = argopal.plot_wind_timeline(out, annotate=True)
     legend = [t.get_text() for t in axes[0].get_legend().get_texts()]
     assert "Nystuen et al. (2015), refitted" in legend
@@ -949,7 +957,7 @@ def test_plot_limits_follow_the_wind_not_sigma():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         out, _ = argopal.fit_wind_models(pal, models=["nystuen2015"])
-        out, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+        out, _ = argopal.wind_uncertainty(out, n_bootstrap=5, components="all")
     out["U_nystuen2015_fit_sigma"] = 1000.0  # an absurd uncertainty
     for plot in (
         argopal.plot_wind,

@@ -501,7 +501,10 @@ def fit_wind_models(
     groups = sorted(set(group)) if len(group) else []
     # a reference needs enough cycles to get its own coefficients
     cyc = pts["cycle"].to_numpy() if "cycle" in pts else np.zeros(len(pts))
-    has_ref = pts[ref_col].notna().to_numpy()
+    has_ref = pts[ref_col].notna().to_numpy().copy()
+    lv = [c for c in levels if c in pts]
+    if lv:  # cycles where the float has a level, not just the reference
+        has_ref &= pts[lv].notna().any(axis=1).to_numpy()
     n_cycles = {g: len(pd.unique(cyc[(group == g) & has_ref])) for g in groups}
     skipped = set()
     if per_ref:
@@ -843,6 +846,7 @@ def wind_uncertainty(
     min_per_bin=30,
     use=None,
     seed=0,
+    components="cv",
 ):
     """Uncertainty of the refitted wind models, per measurement.
 
@@ -855,7 +859,8 @@ def wind_uncertainty(
     reference's terms come from its own points and apply to the
     measurements that use its coefficients.
 
-    Three terms, each a column, and their combination:
+    Three terms, each a column (only those asked for in `components`),
+    and their combination:
 
     "U_<model>_fit_sigma_cv"
         Empirical, out-of-sample, wind-dependent error: the model is
@@ -878,9 +883,15 @@ def wind_uncertainty(
         over the measurements used for fitting (the ones σ_cv is computed
         from); 0 if neither.
     "U_<model>_fit_sigma"
-        Combined: sqrt(max(sigma_cv² - sigma_ref², 0) + sigma_coef²).  The
-        reference error is removed from the empirical term, which contains
-        it, rather than added.
+        Combined from the terms computed: sigma_cv alone by default;
+        sqrt(max(sigma_cv² - sigma_ref², 0) + sigma_coef²) with all three.
+        The reference error is removed from the empirical term, which
+        contains it, rather than added.
+
+    The empirical term is usually enough: it is out-of-sample and already
+    includes the effect of the coefficients being fitted on few cycles.
+    The bootstrap term is unreliable (and can be huge where the refit is
+    extrapolated) with fewer than about 10 cycles.
 
     Parameters
     ----------
@@ -902,11 +913,16 @@ def wind_uncertainty(
         As for `fit_wind_models`.
     seed : int, optional
         Random seed of the bootstrap, by default 0.
+    components : str or list of str, optional
+        The terms to compute and combine: "cv" (default), "coef", "ref",
+        any combination (e.g. ["cv", "ref"]), or "all".  "ref" needs "cv"
+        (it is removed from it).  Without "coef", no bootstrap is run.
 
     Returns
     -------
     pal : pd.DataFrame
-        A copy with the four sigma columns per model.
+        A copy with, per model, the sigma column of each term computed and
+        the combined "U_<model>_fit_sigma".
     bins : pd.DataFrame
         The wind-dependent empirical σ: model, reference_name (the
         reference whose coefficients, "all" if pooled), wind (bin mean),
@@ -917,6 +933,8 @@ def wind_uncertainty(
         raise KeyError("No refitted models: run fit_wind_models first.")
     if "cycle" not in pal:
         raise KeyError("Needs a 'cycle' column for cross-validation.")
+    comps = _components(components)
+    do_coef = "coef" in comps
     reference = fits["reference"]
     ref_col = f"U_{reference}"
     if models is None:
@@ -992,7 +1010,7 @@ def wind_uncertainty(
                     )
                     tables.append(bins.assign(model=name, reference_name=g))
                 # bootstrap over whole cycles
-                if len(cycles) < MIN_BOOTSTRAP_CYCLES:
+                if do_coef and len(cycles) < MIN_BOOTSTRAP_CYCLES:
                     warnings.warn(
                         f"{label}: bootstrap over only {len(cycles)} cycles; "
                         "the coefficient uncertainty is unreliable (and "
@@ -1001,7 +1019,7 @@ def wind_uncertainty(
                 rows_by_cycle = {
                     c: np.flatnonzero(sel & (cycles_all == c)) for c in cycles
                 }
-                for _ in range(n_bootstrap):
+                for _ in range(n_bootstrap if do_coef else 0):
                     pick = rng.choice(cycles, size=len(cycles), replace=True)
                     idx = np.concatenate([rows_by_cycle[c] for c in pick])
                     try:
@@ -1020,7 +1038,7 @@ def wind_uncertainty(
                 "n_cycles": len(cycles),
                 "n_points": int(sel.sum()),
                 "n_applied": int(rows.sum()),
-                "n_bootstrap_ok": len(preds),
+                "n_bootstrap_ok": len(preds) if do_coef else None,
                 "fitted_spl_range": (
                     [float(np.nanmin(x[sel])), float(np.nanmax(x[sel]))]
                     if sel.any()
@@ -1030,11 +1048,22 @@ def wind_uncertainty(
         sigma_cv[~np.isfinite(u_fit)] = np.nan
         sigma_coef[~np.isfinite(u_fit)] = np.nan
         sigma_ref_rows[~np.isfinite(u_fit)] = np.nan
-        out[f"U_{name}_fit_sigma_cv"] = sigma_cv
-        out[f"U_{name}_fit_sigma_coef"] = sigma_coef
-        out[f"U_{name}_fit_sigma_ref"] = sigma_ref_rows
-        empirical = np.clip(sigma_cv**2 - sigma_ref_rows**2, 0, None)
-        out[f"U_{name}_fit_sigma"] = np.sqrt(empirical + sigma_coef**2)
+        terms = {"cv": sigma_cv, "coef": sigma_coef, "ref": sigma_ref_rows}
+        for k in ("cv", "coef", "ref"):
+            col = f"U_{name}_fit_sigma_{k}"
+            if k in comps:
+                out[col] = terms[k]
+            elif col in out:  # from an earlier run with other components
+                out = out.drop(columns=col)
+        var = np.zeros(len(pal))
+        if "cv" in comps:
+            ref2 = sigma_ref_rows**2 if "ref" in comps else 0.0
+            var = var + np.clip(sigma_cv**2 - ref2, 0, None)
+        if do_coef:
+            var = var + sigma_coef**2
+        sig = np.sqrt(var)
+        sig[~np.isfinite(u_fit)] = np.nan
+        out[f"U_{name}_fit_sigma"] = sig
     out.attrs = dict(pal.attrs)
     out.attrs["wind_uncertainty"] = {
         "reference": reference,
@@ -1043,7 +1072,8 @@ def wind_uncertainty(
             if reference_sigma is None and sigma_col in pal
             else float(reference_sigma or 0.0)
         ),
-        "n_bootstrap": n_bootstrap,
+        "components": comps,
+        "n_bootstrap": n_bootstrap if do_coef else 0,
         "bin_width": bin_width,
         "min_per_bin": min_per_bin,
         "models": info,
@@ -1055,6 +1085,27 @@ def wind_uncertainty(
         else pd.DataFrame(columns=cols)
     )
     return out, table
+
+
+UNCERTAINTY_COMPONENTS = ("cv", "coef", "ref")
+
+
+def _components(components):
+    """The uncertainty terms asked for, in a fixed order."""
+    if components == "all":
+        return list(UNCERTAINTY_COMPONENTS)
+    asked = [components] if isinstance(components, str) else list(components)
+    bad = [c for c in asked if c not in UNCERTAINTY_COMPONENTS]
+    if bad or not asked:
+        raise ValueError(
+            'components must be "cv", "coef", "ref", a list of them or '
+            f'"all"; got {components!r}.'
+        )
+    if "ref" in asked and "cv" not in asked:
+        raise ValueError(
+            '"ref" is removed from the empirical term: it needs "cv" too.'
+        )
+    return [c for c in UNCERTAINTY_COMPONENTS if c in asked]
 
 
 def reference_diagnostics(park_table, reference=None, model="nystuen2015"):

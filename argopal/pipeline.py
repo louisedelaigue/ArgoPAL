@@ -61,6 +61,7 @@ def process_float(
     reference_average=True,
     reference_window="1h",
     reference_sigma=None,
+    uncertainty="cv",
     n_bootstrap=100,
     dac=None,
     update=True,
@@ -212,10 +213,16 @@ def process_float(
         default "1h": from 30 min before to 30 min after.
     reference_sigma : float, optional
         Error of the reference wind (m s-1), removed from the empirical
-        uncertainty; by default the table's wind_speed_sigma, else 0.  See
+        uncertainty when `uncertainty` includes "ref"; by default the
+        table's wind_speed_sigma, else 0.  See `wind_uncertainty`.
+    uncertainty : str or list of str, optional
+        Terms of the refitted wind's uncertainty: "cv" (default, the
+        cross-validated error), "coef" (bootstrap of the coefficients),
+        "ref" (reference error), a list of them, or "all".  See
         `wind_uncertainty`.
     n_bootstrap : int, optional
-        Bootstrap refits for the coefficient uncertainty, by default 100.
+        Bootstrap refits for the coefficient uncertainty (with "coef"), by
+        default 100.
     dac, update, gdac, verbose
         As for `download_aux`.
 
@@ -353,7 +360,10 @@ def process_float(
             by_reference=True,
         )
         pal, extra["wind_uncertainty"] = wind_uncertainty(
-            pal, reference_sigma=reference_sigma, n_bootstrap=n_bootstrap
+            pal,
+            reference_sigma=reference_sigma,
+            n_bootstrap=n_bootstrap,
+            components=uncertainty,
         )
         if ais is not None and "U_nystuen2015_fit" in pal:
             pal = flag_ship_deviation(

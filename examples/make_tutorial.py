@@ -262,8 +262,7 @@ can be given, e.g. `"30min"` or `"3h"`).  The models are fitted and
 assessed on these hourly points, then applied to every measurement.
 
 `fit_max_distance_km` sets the radius used for fitting, skill and
-uncertainty (40 km by default).  The buoys give no error per value, so one
-error for all of them is passed as `reference_sigma`.
+uncertainty (40 km by default).
 """)
 
 code("""
@@ -272,7 +271,6 @@ cal = argopal.process_float(
     mode="raw",
     reference={"buoys": "data/reference_winds_2026.csv"},
     fit_max_distance_km=40,
-    reference_sigma=0.5,   # the buoys' wind error (m s⁻¹)
     verbose=False,
 )
 cal["park"].attrs["references"]["buoys"]["references"]
@@ -341,14 +339,19 @@ cal["wind_skill"].round(2)
 """)
 
 md("""
-Uncertainty, per measurement and per refitted model:
+Uncertainty, per measurement and per refitted model.  By default, one
+term: `U_<model>_fit_sigma_cv`, the empirical error, cross-validated by
+leaving one cycle out and binned by wind speed; `U_<model>_fit_sigma` is
+then the same.  Two more terms are optional
+(`uncertainty=["cv", "coef", "ref"]` or `"all"` in `process_float`,
+`components=` in `wind_uncertainty`):
 
-- `_sigma_cv`: empirical error, cross-validated by leaving one cycle out,
-  binned by wind speed;
-- `_sigma_coef`: coefficient uncertainty, bootstrap over cycles;
+- `_sigma_coef`: coefficient uncertainty, bootstrap over cycles
+  (unreliable with fewer than about 10 cycles);
 - `_sigma_ref`: the buoys' own error (`reference_sigma`, or the table's
-  `wind_speed_sigma`);
-- `_sigma`: combined, √(σ_cv² − σ_ref² + σ_coef²).
+  `wind_speed_sigma`), removed from σ_cv, which contains it;
+
+combined as √(max(σ_cv² − σ_ref², 0) + σ_coef²).
 
 The empirical error by wind-speed bin:
 """)
@@ -358,10 +361,9 @@ cal["wind_uncertainty"].round(2)
 """)
 
 md("""
-Ten cycles pass within 40 km of a buoy, the minimum ArgoPAL asks for the
-bootstrap; with fewer, it warns that the coefficient term is unreliable.
-The refit should still not be trusted far outside the winds seen near the
-buoys.
+The cross-validated error already includes the effect of fitting the
+coefficients on a few cycles.  The refit should still not be trusted far
+outside the winds seen near the buoys.
 """)
 
 code("""
@@ -500,7 +502,8 @@ skill[skill["wind"] == "U_nystuen2015_fit"].round(2)
 md("""
 **Error of each reference value.**  A `wind_speed_sigma` column in the
 table is carried to each measurement (`<name>_sigma`) and used as σ_ref by
-`wind_uncertainty`, unless `reference_sigma` is given.  The values below
+`wind_uncertainty` with `components=["cv", "ref"]` (or `"all"`), unless
+`reference_sigma` is given.  The values below
 are only for illustration: these buoys do not give an error per value.
 """)
 
@@ -512,7 +515,7 @@ illustrative = buoys.assign(
 )
 p = argopal.collocate_reference(raw["park"], illustrative, name="buoys")
 p, _ = argopal.fit_wind_models(p, models=["nystuen2015"])
-p, _ = argopal.wind_uncertainty(p, n_bootstrap=20)
+p, _ = argopal.wind_uncertainty(p, components=["cv", "ref"])
 by_buoy = p.attrs["wind_uncertainty"]["models"]["nystuen2015"]
 print("σ_ref from the table:",
       {buoy: round(v["sigma_ref"], 2) for buoy, v in by_buoy.items()})

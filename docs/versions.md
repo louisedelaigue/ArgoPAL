@@ -36,6 +36,14 @@
   without coefficients get no refitted wind (`<name>_closest` gives the
   closest reference, and `plot_wind_timeline` marks those periods in
   grey).
+- `wind_uncertainty(components=...)` and `process_float(uncertainty=...)`
+  choose the uncertainty terms: only the cross-validated σ_cv by default;
+  the bootstrap coefficient term ("coef") and the reference error ("ref")
+  are optional (`"all"` for the three, as before).  Without "coef", no
+  bootstrap is run.
+- `min_cycles` counts only the cycles where the float has a spectral
+  level, not every cycle with a reference value (e.g. before the
+  delayed-mode data end).
 - Wind plots set their axis from the winds, not the ±1σ band, so a wide
   band no longer squeezes the figure.
 - `plot_wind_timeline`: the float wind through the whole deployment, a

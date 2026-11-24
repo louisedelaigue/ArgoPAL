@@ -127,14 +127,22 @@ Steps: `collocate_reference`, `fit_wind_models` (nonlinear least squares
 from the published coefficients; adds `U_<model>_fit`), `wind_skill` /
 `wind_metrics` (n, bias, RMSE, R² = 1 − SS_res/SS_tot, Pearson r², slope,
 intercept; `by_reference=True` adds one set of rows per reference), and
-`wind_uncertainty`, which adds four columns per refitted model:
+`wind_uncertainty`, which adds the uncertainty of each refitted model.
+By default only the cross-validated term is computed, and
+`U_<model>_fit_sigma` is that term; the coefficient and reference terms
+are optional (`components=["cv", "coef", "ref"]` or `"all"`;
+`uncertainty=` in `process_float`).  The cross-validated term is usually
+enough: it is out of sample, so it already includes the effect of fitting
+the coefficients on few cycles, whereas the bootstrap term needs about 10
+cycles to be reliable and can be very large where the refit is
+extrapolated.
 
 | column | what it is |
 |---|---|
-| `U_<model>_fit_sigma_cv` | empirical error, out of sample and wind-dependent: the model is refitted on all cycles but one and predicts the cycle left out; the RMSE of these residuals in 2 m s⁻¹ wind bins gives σ(U).  Includes every error source, and the buoy's own error |
-| `U_<model>_fit_sigma_coef` | coefficient uncertainty: spread over 100 refits on cycles resampled with replacement.  Small inside the fitted wind range, large where the refit is extrapolated (unreliable with fewer than 10 cycles) |
-| `U_<model>_fit_sigma_ref` | the reference's own error: `reference_sigma` if given, else the root mean square of `wind_speed_sigma` over the measurements used for fitting, else 0 |
-| `U_<model>_fit_sigma` | combined: √(max(σ_cv² − σ_ref², 0) + σ_coef²); the buoy error is removed from the empirical term, which contains it |
+| `U_<model>_fit_sigma_cv` | (default) empirical error, out of sample and wind-dependent: the model is refitted on all cycles but one and predicts the cycle left out; the RMSE of these residuals in 2 m s⁻¹ wind bins gives σ(U).  Includes every error source, and the buoy's own error |
+| `U_<model>_fit_sigma_coef` | (optional, "coef") coefficient uncertainty: spread over 100 refits on cycles resampled with replacement.  Small inside the fitted wind range, large where the refit is extrapolated (unreliable with fewer than 10 cycles) |
+| `U_<model>_fit_sigma_ref` | (optional, "ref", with "cv") the reference's own error: `reference_sigma` if given, else the root mean square of `wind_speed_sigma` over the measurements used for fitting, else 0 |
+| `U_<model>_fit_sigma` | combined from the terms computed: σ_cv by default; √(max(σ_cv² − σ_ref², 0) + σ_coef²) with all three (the buoy error is removed from the empirical term, which contains it) |
 
 With AIS as well, the second ship-noise criterion of the paper is applied
 (`flag_ship_deviation`): a measurement is `ship_contaminated` when a ship

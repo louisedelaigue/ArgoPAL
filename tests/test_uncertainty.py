@@ -45,7 +45,7 @@ def _float(n_cycles=20, per_cycle=60, noise=0.5, relative=False, seed=0):
 
 
 def test_four_columns_and_bins():
-    p, bins = argopal.wind_uncertainty(_float())
+    p, bins = argopal.wind_uncertainty(_float(), components="all")
     for suffix in ("_cv", "_coef", "_ref", ""):
         assert f"U_nystuen2015_fit_sigma{suffix}" in p
     assert set(bins.columns) == {
@@ -68,7 +68,7 @@ def test_empirical_sigma_grows_with_wind_when_noise_does():
 
 
 def test_coefficient_sigma_small_inside_large_outside_fitted_range():
-    p, _ = argopal.wind_uncertainty(_float())
+    p, _ = argopal.wind_uncertainty(_float(), components="all")
     inside = p["U_nystuen2015_fit_sigma_coef"].median()
     assert inside < 0.2
     # extrapolation: apply the bootstrap refits to a level far outside
@@ -77,12 +77,14 @@ def test_coefficient_sigma_small_inside_large_outside_fitted_range():
     q.loc[0, "U_nystuen2015_fit"] = argopal.wind_nystuen2015(
         75.0, **q.attrs["wind_fits"]["coefficients"]["nystuen2015"]["all"]
     )
-    q, _ = argopal.wind_uncertainty(q)
+    q, _ = argopal.wind_uncertainty(q, components="all")
     assert q.loc[0, "U_nystuen2015_fit_sigma_coef"] > 5 * inside
 
 
 def test_reference_error_is_removed_in_quadrature():
-    p, _ = argopal.wind_uncertainty(_float(), reference_sigma=0.3)
+    p, _ = argopal.wind_uncertainty(
+        _float(), reference_sigma=0.3, components="all"
+    )
     cv = p["U_nystuen2015_fit_sigma_cv"]
     coef = p["U_nystuen2015_fit_sigma_coef"]
     assert (p["U_nystuen2015_fit_sigma_ref"] == 0.3).all()
@@ -90,7 +92,9 @@ def test_reference_error_is_removed_in_quadrature():
         p["U_nystuen2015_fit_sigma"], np.sqrt(cv**2 - 0.3**2 + coef**2)
     )
     # a reference error larger than the empirical one leaves only coef
-    big, _ = argopal.wind_uncertainty(_float(), reference_sigma=5.0)
+    big, _ = argopal.wind_uncertainty(
+        _float(), reference_sigma=5.0, components="all"
+    )
     np.testing.assert_allclose(
         big["U_nystuen2015_fit_sigma"], big["U_nystuen2015_fit_sigma_coef"]
     )
@@ -105,10 +109,10 @@ def test_needs_fit_cycles_and_enough_of_them():
         argopal.wind_uncertainty(_float().drop(columns="cycle"))
     few = _float(n_cycles=2)
     with pytest.warns(UserWarning, match="at least 3"):
-        q, _ = argopal.wind_uncertainty(few)
+        q, _ = argopal.wind_uncertainty(few, components="all")
     assert q["U_nystuen2015_fit_sigma"].isna().all()
     with pytest.warns(UserWarning, match="unreliable"):
-        argopal.wind_uncertainty(_float(n_cycles=5))
+        argopal.wind_uncertainty(_float(n_cycles=5), components="all")
 
 
 def test_2025_float_three_cycles():
@@ -120,7 +124,9 @@ def test_2025_float_three_cycles():
         )
         p, _ = argopal.fit_wind_models(p)
     with pytest.warns(UserWarning, match="unreliable"):
-        q, bins = argopal.wind_uncertainty(p, reference_sigma=0.5)
+        q, bins = argopal.wind_uncertainty(
+            p, reference_sigma=0.5, components="all"
+        )
     nys = bins[bins["model"] == "nystuen2015"]
     assert 0.5 < nys["sigma_cv"].min() and nys["sigma_cv"].max() < 4
     # three cycles cannot pin the coefficients down: a heavy tail of
@@ -151,3 +157,43 @@ def test_pipeline_adds_uncertainty(offline):
         )
     assert "wind_uncertainty" in r
     assert "U_nystuen2015_fit_sigma" in r["park"]
+
+
+def test_components_choose_the_terms():
+    pal = _float()
+    # default: the cross-validated term only, no bootstrap
+    p, _ = argopal.wind_uncertainty(pal)
+    s = "U_nystuen2015_fit_sigma"
+    assert f"{s}_cv" in p and f"{s}_coef" not in p and f"{s}_ref" not in p
+    np.testing.assert_allclose(p[s], p[f"{s}_cv"])
+    info = p.attrs["wind_uncertainty"]
+    assert info["components"] == ["cv"] and info["n_bootstrap"] == 0
+    assert info["models"]["nystuen2015"]["all"]["n_bootstrap_ok"] is None
+    # cv and ref: the reference error removed from cv
+    q, _ = argopal.wind_uncertainty(
+        pal, components=["ref", "cv"], reference_sigma=0.3
+    )
+    assert f"{s}_coef" not in q
+    np.testing.assert_allclose(
+        q[s], np.sqrt(np.clip(q[f"{s}_cv"] ** 2 - 0.09, 0, None))
+    )
+    # all, then back to cv: the columns of the earlier terms are removed
+    a, _ = argopal.wind_uncertainty(pal, components="all")
+    assert {f"{s}_cv", f"{s}_coef", f"{s}_ref"} <= set(a)
+    b, _ = argopal.wind_uncertainty(a, components="cv")
+    assert f"{s}_coef" not in b
+    for bad in ("x", [], ["ref"]):
+        with pytest.raises(ValueError):
+            argopal.wind_uncertainty(pal, components=bad)
+
+
+def test_min_cycles_counts_cycles_with_a_float_level():
+    pal = _float()
+    raw = pal.drop(
+        columns=[c for c in pal if c.startswith("U_nystuen2015_fit")]
+    )
+    # the reference covers 20 cycles, the float level only 3 of them
+    raw.loc[raw["cycle"] > 3, "spl_8000Hz"] = np.nan
+    with pytest.warns(UserWarning, match="all references together"):
+        _, fits = argopal.fit_wind_models(raw.assign(buoy_reference_name="X"))
+    assert fits["n_cycles"].iloc[0] == 3
