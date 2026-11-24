@@ -612,3 +612,31 @@ def test_pipeline_ais_remove_with_reference_uses_both_criteria(offline):
     kept = flagged & ~contaminated
     assert p.loc[kept, "spl_8000Hz"].notna().all()
     assert p.loc[contaminated, "spl_8000Hz"].isna().all()
+
+
+def test_reference_positions_and_map():
+    pal = _pal(
+        [T0 + pd.Timedelta("10min"), T0 + pd.Timedelta("20min")],
+        lat=[43.38, 43.38 + 25 / 111.2],
+    )
+    refs = _several_references()
+    # buoy B also reported once at a second position, 10 km away
+    extra = refs[refs["reference_name"] == "B"].iloc[:1].copy()
+    extra["latitude"] += 10 / 111.2
+    out = argopal.collocate_reference(
+        pal, pd.concat([refs, extra]), name="buoys"
+    )
+    pos = out.attrs["references"]["buoys"]["positions"]
+    assert set(pos) == {"A", "B"}
+    assert pos["A"]["latitude"] == pytest.approx(43.38)
+    assert pos["A"]["n_positions"] == 1 and pos["A"]["spread_km"] == 0
+    # the most frequent position, and how far the other one is
+    assert pos["B"]["latitude"] == pytest.approx(43.38 + 30 / 111.2, abs=1e-3)
+    assert pos["B"]["n_positions"] == 2
+    assert pos["B"]["spread_km"] == pytest.approx(10, rel=0.05)
+
+    _, ax = argopal.plot_reference_map(out, radius_km=20, annotate=True)
+    texts = [t.get_text() for t in ax.texts]
+    assert "A" in texts and "B" in texts
+    with pytest.raises(KeyError, match="collocate_reference"):
+        argopal.plot_reference_map(pal.assign(U_x=1.0))

@@ -111,6 +111,22 @@ def read_reference(source, latitude=None, longitude=None):
     return out.sort_values("datetime").reset_index(drop=True)
 
 
+def _position_summary(g):
+    pos = g[["latitude", "longitude"]].round(3).dropna()
+    if pos.empty:
+        return {"latitude": None, "longitude": None, "n_positions": 0,
+                "spread_km": None}  # fmt: skip
+    counts = pos.value_counts()
+    lat, lon = counts.index[0]
+    spread = _haversine_km(lat, lon, pos["latitude"], pos["longitude"])
+    return {
+        "latitude": float(lat),
+        "longitude": float(lon),
+        "n_positions": len(counts),
+        "spread_km": round(float(np.max(spread)), 1),
+    }
+
+
 def collocate_reference(
     pal,
     reference,
@@ -155,7 +171,10 @@ def collocate_reference(
         "<name>_dt_min" (reference time minus measurement time, minutes),
         "<name>_time" (time of the reference value used),
         "<name>_reference_name" if the table names its references, and
-        "<name>_sigma" (m s-1) if it gives their error.
+        "<name>_sigma" (m s-1) if it gives their error.  `attrs
+        ["references"][<name>]["positions"]` records where each reference
+        is: its most frequent position, how many distinct positions it
+        has and how far the furthest is ("spread_km").
     """
     col = f"U_{name}"
     models = pal.attrs.get("wind_models", {}).get("applied", {})
@@ -241,5 +260,11 @@ def collocate_reference(
         refs[name]["references"] = {
             str(r): int(counts.get(r, 0)) for r, _ in groups
         }
+    # where each reference is (for maps): its most frequent position, and
+    # how far its other positions are from it (a ship, or a buoy reported
+    # at several positions)
+    refs[name]["positions"] = {
+        str(name if r is None else r): _position_summary(g) for r, g in groups
+    }
     out.attrs["references"] = refs
     return out

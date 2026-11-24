@@ -273,8 +273,9 @@ cal["park"].attrs["references"]["buoys"]["references"]
 
 md("""
 The float passed within 40 km of DYFAMED in February 2026 (cycles 9–12)
-and of PACA in April 2026 (cycles 17–22); LION is always more than 100 km
-away.  The refit pools the measurements near both buoys.
+and of PACA in April 2026 (cycles 17–22); while the LION record lasts
+(to June), the float is more than 100 km from it.  The refit pools the
+measurements near both buoys.
 """)
 
 code("""
@@ -282,6 +283,20 @@ p = cal["park"]
 p.groupby("buoys_reference_name")["buoys_distance_km"].describe()[
     ["count", "min", "50%", "max"]
 ].round(1)
+""")
+
+md("""
+On a map: the trajectory, the measurements within 40 km of the buoy they
+were matched to (black, those used for the refit), and each buoy with a
+40 km circle.  The float later crosses LION's circle, but after the end of
+the buoy record, so with nothing to compare with.  With `annotate=True`,
+the figure also notes buoys reported at several positions: PACA appears
+at two positions about 25 km apart in the Météo-France file, and is shown
+at the more frequent one.
+""")
+
+code("""
+fig, ax = argopal.plot_reference_map(cal["park"], annotate=True)
 """)
 
 code("""

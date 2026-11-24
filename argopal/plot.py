@@ -562,6 +562,127 @@ def plot_positions(park_table, positions, annotate=False):
     return fig, ax
 
 
+def plot_reference_map(
+    park_table, reference=None, radius_km=None, annotate=False
+):
+    """Map of the float's trajectory and of the reference stations.
+
+    The trajectory (grey), with the measurements within `radius_km` of
+    the reference they were matched to (black: those used to refit the
+    wind models), and each reference (triangle) with a circle of that
+    radius around it.
+
+    Parameters
+    ----------
+    park_table : pd.DataFrame
+        PAL table after `attach_positions` and `collocate_reference`
+        (`result["park"]` with a `reference`).
+    reference : str, optional
+        Name given to `collocate_reference`; by default the one used for
+        fitting, or the only one.
+    radius_km : float, optional
+        Radius of the circles and of the highlighted measurements; by
+        default the one used by `fit_wind_models`, else 40 km.
+    annotate : bool, optional
+        Add a title and notes, by default False.
+
+    Returns
+    -------
+    fig, ax
+    """
+    import cartopy.crs as ccrs
+    from cartopy.geodesic import Geodesic
+
+    reference = reference or _fit_reference(park_table)
+    info = park_table.attrs.get("references", {}).get(reference, {})
+    stations = {
+        k: v for k, v in info.get("positions", {}).items()
+        if v.get("latitude") is not None
+    }  # fmt: skip
+    if not stations:
+        raise KeyError(
+            "No reference positions: run collocate_reference first."
+        )
+    if radius_km is None:
+        radius_km = park_table.attrs.get("wind_fits", {}).get(
+            "max_distance_km"
+        )
+        radius_km = 40.0 if radius_km is None else radius_km
+    pc = ccrs.PlateCarree()
+    p = park_table.dropna(subset=["latitude", "longitude"])
+    dist = p.get(f"{reference}_distance_km")
+    near = (
+        p[(dist <= radius_km) & p[f"U_{reference}"].notna()]
+        if dist is not None
+        else p.iloc[:0]
+    )
+    slon = [v["longitude"] for v in stations.values()]
+    slat = [v["latitude"] for v in stations.values()]
+    with _style():
+        fig, ax = map_axes(
+            np.concatenate([p["longitude"], slon]),
+            np.concatenate([p["latitude"], slat]),
+        )
+        ax.plot(
+            p["longitude"], p["latitude"], color=BEFORE, lw=1.2,
+            label="Float trajectory", transform=pc, zorder=2,
+        )  # fmt: skip
+        ax.plot(
+            near["longitude"], near["latitude"], ls="none", marker=".",
+            ms=3, color=AFTER, transform=pc, zorder=3,
+            label=f"Within {radius_km:g} km of a reference",
+        )  # fmt: skip
+        geod = Geodesic()
+        for i, (name, v) in enumerate(stations.items()):
+            ring = np.asarray(
+                geod.circle(v["longitude"], v["latitude"], radius_km * 1e3)
+            )
+            ax.plot(
+                np.append(ring[:, 0], ring[0, 0]),
+                np.append(ring[:, 1], ring[0, 1]),
+                color="tab:red", ls="--", lw=0.8, transform=pc, zorder=3,
+            )  # fmt: skip
+            ax.plot(
+                v["longitude"], v["latitude"], ls="none", marker="^", ms=9,
+                color="tab:red", mec="white", mew=0.8, transform=pc,
+                zorder=5, label="Reference" if i == 0 else None,
+            )  # fmt: skip
+            ax.annotate(
+                name, (v["longitude"], v["latitude"]), xytext=(7, 4),
+                xycoords=pc._as_mpl_transform(ax),
+                textcoords="offset points", fontsize=9, fontweight="bold",
+                zorder=6,
+            )  # fmt: skip
+        first = p.iloc[0] if len(p) else None
+        if first is not None:
+            ax.annotate(
+                "START", (first["longitude"], first["latitude"]),
+                xytext=(6, 6), xycoords=pc._as_mpl_transform(ax),
+                textcoords="offset points", fontsize=8, zorder=6,
+            )  # fmt: skip
+        ax.legend(loc="best")
+        if annotate:
+            spread = {
+                k: v["spread_km"] for k, v in stations.items()
+                if (v.get("spread_km") or 0) > 1
+            }  # fmt: skip
+            note = (
+                f"{len(near)} of {len(p)} measurements within "
+                f"{radius_km:g} km of their reference."
+            )
+            if spread:
+                note += (
+                    " Reported at several positions: "
+                    + ", ".join(
+                        f"{k} (up to {d:g} km apart)"
+                        for k, d in spread.items()
+                    )
+                    + "; shown at the most frequent."
+                )
+            _annotate(fig, f"{_wmo(park_table)}float and references", note)
+    return fig, ax
+
+
 # --- Step 5: gridded_profiles ------------------------------------------------------
 
 
@@ -1170,6 +1291,8 @@ def plot_all(
         figs["ais"] = plot_ais(result["park"], band=band, **a)[0]
     if result["park"].attrs.get("wind_models", {}).get("applied"):
         figs["wind"] = plot_wind(result["park"], **a)[0]
+    if result["park"].attrs.get("references"):
+        figs["reference_map"] = plot_reference_map(result["park"], **a)[0]
     if any(c.endswith("_fit") for c in result["park"]):
         figs["wind_fit"] = plot_wind_fit(result["park"], **a)[0]
     if save_dir is not None:
