@@ -83,10 +83,19 @@ listed in the [version history](https://argopal.readthedocs.io/en/latest/version
 - **Calibration needs a reference.**  The published wind models were not
   made for floats and are biased on them (e.g. +1.4 m s⁻¹ for Nystuen on
   7902280, against three Météo-France buoys at 10 m).  Refitting needs reference winds (buoys) that the float
-  passes close to; ArgoPAL does not download them.  With fewer than 10
-  cycles near a reference, the coefficient uncertainty is unreliable, and
-  a refit is not to be trusted far outside the winds seen near the
+  passes close to; ArgoPAL does not download them.  A reference needs
+  float data in 4 cycles to be calibrated (`calibration_min_cycles`); the
+  optional bootstrap uncertainty of the coefficients needs about 10.  A
+  refit is not to be trusted far outside the winds seen near the
   reference.
+- **Low winds.**  Below about 2–3 m s⁻¹, few waves break and other noise
+  sources set the 8 kHz level: the acoustic wind levels off while the
+  true wind goes to zero.  Low acoustic winds are best read as "below
+  about 3 m s⁻¹".
+- **High winds.**  Above about 15 m s⁻¹, bubble clouds absorb part of
+  the sound and floats usually see few such winds near a reference: the
+  refitted wind tends to be low there (slope below 1 against the
+  reference).
 - **Delayed mode lags.**  The default mode uses delayed-mode profiles
   only; recent profiles are not in delayed mode yet, so the depth
   correction, and the wind, stop where delayed-mode data stop.

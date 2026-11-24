@@ -711,11 +711,21 @@ def plot_reference_map(
     min_r = park_table.attrs.get("wind_fits", {}).get("min_footprint_r")
     used = _used_measurements(park_table, reference, radius_km, min_r)
     near = _near(park_table, reference, radius_km, min_r)
+    # references with float data near them but no coefficients (too few
+    # cycles): their measurements were not used
+    fits = park_table.attrs.get("wind_fits", {})
+    calibrated = {g for c in fits.get("coefficients", {}).values() for g in c}
+    name_col = f"{reference}_reference_name"
+    if (fits.get("calibration") == "per_reference" and name_col in used
+            and calibrated):  # fmt: skip
+        ok = used[name_col].astype(str).isin(calibrated)
+        not_cal, used = used[~ok], used[ok]
+    else:
+        not_cal = used.iloc[:0]
     within = (
         f"inside footprint, R ≥ {min_r:g}" if min_r is not None
         else f"within {radius_km:g} km"
     )  # fmt: skip
-    name_col = f"{reference}_reference_name"
 
     def of(table, name):
         if name_col in table:
@@ -724,16 +734,20 @@ def plot_reference_map(
 
     # references used for fitting, and references the float came close to
     # only without a float wind (e.g. before the delayed-mode data exist)
-    shown, unused = {}, {}
+    shown, unused, uncal = {}, {}, {}
     for name, v in stations.items():
         mine = of(used, name)
         if len(mine):
             shown[name] = _station_positions(mine, reference, name, v)
+        elif len(of(not_cal, name)):
+            uncal[name] = _station_positions(
+                of(not_cal, name), reference, name, v
+            )
         elif len(of(near, name)):
             unused[name] = _station_positions(
                 of(near, name), reference, name, v
             )
-    every = list(shown.values()) + list(unused.values())
+    every = [*shown.values(), *uncal.values(), *unused.values()]
     slat = [la for pos in every for la, _ in pos]
     slon = [lo for pos in every for _, lo in pos]
     mode = park_table.attrs.get("depth_correction", {}).get("mode")
@@ -765,6 +779,12 @@ def plot_reference_map(
             ms=3, color="tab:red", transform=pc, zorder=3,
             label=f"Used for fitting ({within})",
         )  # fmt: skip
+        if len(not_cal):
+            ax.plot(
+                not_cal["longitude"], not_cal["latitude"], ls="none",
+                marker=".", ms=3, color=BEFORE, transform=pc, zorder=2.5,
+                label=f"Not used: reference with too few cycles ({within})",
+            )  # fmt: skip
         geod = Geodesic()
         labelled = set()
         by_fp = min_r is not None and footprints is not None
@@ -780,7 +800,7 @@ def plot_reference_map(
             best, top = r_all.argmax(axis=0), r_all.max(axis=0)
             every = _reference_colours(park_table, reference)
             colour_of = {n: every[n] for n in shown if n in every}
-            colour_of.update({n: BEFORE for n in unused})
+            colour_of.update({n: BEFORE for n in [*unused, *uncal]})
             for name, col in colour_of.items():
                 if name not in fp_names:
                     continue
@@ -800,6 +820,7 @@ def plot_reference_map(
                 )  # fmt: skip
         for group, colour, label in (
             (shown, "tab:red", "Reference used for fitting"),
+            (uncal, BEFORE, "Reference not calibrated (too few cycles)"),
             (unused, BEFORE, "Reference not used (no float wind)"),
         ):
             for name, positions in group.items():
@@ -831,6 +852,7 @@ def plot_reference_map(
         if by_fp:  # one triangle in the legend, the footprints give colours
             for group, colour, label in (
                 (shown, AFTER, "Reference used for fitting"),
+                (uncal, BEFORE, "Reference not calibrated (too few cycles)"),
                 (unused, BEFORE, "Reference not used (no float wind)"),
             ):
                 if group:
@@ -857,6 +879,12 @@ def plot_reference_map(
                 + (", ".join(shown) if shown else "no reference")
                 + "."
             )
+            if uncal:
+                note += (
+                    " Too few cycles to calibrate, not used: "
+                    + ", ".join(uncal)
+                    + "."
+                )
             if unused:
                 note += (
                     " Passed without a float wind, not used: "

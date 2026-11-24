@@ -89,6 +89,9 @@ Only used with `reference`.
 - `calibration_min_cycles`: float cycles with data near a reference that
   it needs to get coefficients.  Default **`4`**.  The measurements
   closest to a reference without coefficients get no refitted wind.
+  3 is the lowest that still gives the cross-validated uncertainty (one
+  cycle left out, fitted on the others): worth trying when a reference
+  with a good fit is left out, e.g. one the float passed only briefly.
 - `fit_reference`: with several reference sources (a dict), the one to
   calibrate against.  Default: the first.
 

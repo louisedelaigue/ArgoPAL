@@ -107,6 +107,14 @@ Each is also a function, e.g. `argopal.wind_nystuen2015(spl)`.  These
 models were not made for floats and are biased on them: calibrating
 against reference winds corrects this.
 
+:::{note}
+Acoustic wind has two limits that calibration does not remove.  Below
+about 2–3 m s⁻¹ few waves break, other noise sets the level, and the
+acoustic wind levels off: low values mean "below about 3 m s⁻¹".  Above
+about 15 m s⁻¹ bubble clouds absorb part of the sound, and floats seldom
+see such winds near a reference, so the refitted wind tends to be low.
+:::
+
 ## Calibration against reference winds
 
 ArgoPAL does not download reference winds: a table of buoy (or ship)
@@ -130,10 +138,12 @@ reference separately (nonlinear least squares, from the published
 coefficients), on the float data within 40 km of it
 (`fit_max_distance_km`) or inside its footprint.  Each measurement then
 uses the coefficients of the reference closest to it.  A reference needs
-float data in at least 4 cycles (`calibration_min_cycles`) to be
-calibrated; the measurements closest to a reference without coefficients
-get **no refitted wind**, e.g. where the float has no delayed-mode data
-near it yet.  `calibration="pooled"` fits one set of coefficients to all
+float data in at least 4 cycles (`calibration_min_cycles`; 3 is the
+lowest that still allows cross-validation) to be calibrated; the
+measurements closest to a reference without coefficients get **no
+refitted wind**, e.g. where the float has no delayed-mode data near it
+yet.  Such a reference is not counted in `<name>_used` and is greyed out
+on the map.  `calibration="pooled"` fits one set of coefficients to all
 references together instead.
 
 New columns tell what was used: `<name>_used` (the measurements used for

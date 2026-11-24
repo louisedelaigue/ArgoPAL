@@ -41,6 +41,12 @@
   the bootstrap coefficient term ("coef") and the reference error ("ref")
   are optional (`"all"` for the three, as before).  Without "coef", no
   bootstrap is run.
+- A reference with too few cycles is no longer marked as used: its
+  measurements are False in `<name>_used`, and `plot_reference_map` greys
+  it out ("Reference not calibrated (too few cycles)").  The warning
+  suggests lowering `calibration_min_cycles`.
+- Documentation: the low-wind floor (about 2–3 m s⁻¹) and the low bias at
+  high winds.
 - `min_cycles` counts only the cycles where the float has a spectral
   level, not every cycle with a reference value (e.g. before the
   delayed-mode data end).

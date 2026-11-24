@@ -936,6 +936,15 @@ def test_minimum_cycles_for_own_calibration():
     assert (out.loc[near_a, "b_calibration"] == "A").all()
     assert out.loc[near_a & out["U_nystuen2015"].notna(),
                    "U_nystuen2015_fit"].notna().all()  # fmt: skip
+    # B's measurements are not counted as used, and the map says why
+    assert not out.loc[out["b_reference_name"] == "B", "b_used"].any()
+    assert out.loc[out["b_reference_name"] == "A", "b_used"].any()
+    _, ax = argopal.plot_reference_map(out)
+    legend = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert "Reference not calibrated (too few cycles)" in legend
+    assert any(
+        x.startswith("Not used: reference with too few") for x in legend
+    )
     # the timeline marks where there is no calibration
     _, axes = argopal.plot_wind_timeline(out)
     legend = [t.get_text() for t in axes[0].figure.legends[0].get_texts()] if (

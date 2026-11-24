@@ -529,8 +529,13 @@ def fit_wind_models(
                 f"{min_cycles} cycles for "
                 + ", ".join(f"{g} ({n_cycles[g]})" for g in sorted(skipped))
                 + ": no coefficients; the measurements matched or closest "
-                "to them get no refitted wind."
+                "to them get no refitted wind.  Lower calibration_min_cycles "
+                "(min_cycles) to calibrate them anyway."
             )
+            # their measurements were not used for any refit
+            if name_col in out:
+                skip_rows = out[name_col].astype(str).isin(skipped).to_numpy()
+                out[f"{reference}_used"] = used & ~skip_rows
     rows, coefs = [], {}
     spl_of = {}
     for name in models:
