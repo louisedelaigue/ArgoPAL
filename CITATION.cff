@@ -1,12 +1,12 @@
 cff-version: 1.2.0
-message: "If you use ArgoPAL, please cite the software and the method paper."
+message: "Work using ArgoPAL should cite the software and the method paper."
 title: "ArgoPAL: wind speed from passive acoustics on BGC-Argo floats"
 type: software
 authors:
   - family-names: Delaigue
     given-names: Louise
-version: 0.1.0b1
-date-released: 2026-11-22
+version: 0.1.0b2
+date-released: 2026-11-24
 license: GPL-3.0-only
 repository-code: "https://github.com/louisedelaigue/ArgoPAL"
 url: "https://argopal.readthedocs.io"

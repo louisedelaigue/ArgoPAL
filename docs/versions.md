@@ -1,100 +1,117 @@
 # Version history
 
-## Unreleased
+## 0.1.0b2 (2026-11-24)
 
-- Reference winds: the measurements around each reference value are
-  averaged before the models are fitted and assessed
-  (`average_to_reference`; `reference_average=True` and
-  `reference_window="1h"`, i.e. ±30 min, by default; any window width can
-  be chosen).  Comparing every 5-min measurement with an hourly value
-  gave vertical stripes in the fit figure and treated measurements that
-  share one reference value as independent.
-- `collocate_reference` adds `<name>_time`, the time of the reference
-  value used.
-- `select_bands(pal, bands="all")` keeps every band that holds data.
-- Variable names from the core files are plain strings.
+Second beta release.  The interface may still change before 1.0.
+
+### Highlights
+
+- **One calibration per reference** (the default): each reference
+  (buoy) gets its own coefficients, fitted on the float data near it and
+  used for the measurements closest to it.  `calibration="pooled"` keeps
+  one set of coefficients for all.
+- **Wind footprints**: the float data that calibrate each reference can
+  be chosen from a reanalysis (`footprints=`), where the wind follows the
+  wind at the reference, instead of within a fixed distance.
+- **10 m reference winds**: reference winds are converted to 10 m from
+  their measurement height.
+- **Averaging around each reference value** before fitting (±30 min by
+  default).
+- **Simpler uncertainty**: the cross-validated σ by default; the
+  bootstrap and reference terms are optional.
+- **New figures**: maps of the float and references, time series per
+  reference, and the whole record with the calibration used.
+
+### Finding floats
+
 - `find_pal_floats`: every float on the GDAC with PAL data (found by
   reading the start of each `Rtraj_aux` file; saved and reused for a
   week), with where and when it measured; `read_profile_index`: the
   GDAC's synthetic-profile index.
+- `select_bands(pal, bands="all")` keeps every band that holds data.
+- Variable names from the core files are plain strings.
 - Tested on the three other PAL floats on the GDAC (2904023, 2904024,
   7902388), including full 23-band spectra.
-- `plot_reference_map`: the float's trajectory and the references used to
-  refit the wind models on a map, with the fitting radius and the
-  measurements used (also in `plot_all` when there is a reference).
-  `collocate_reference` records each reference's position (the most
-  frequent one, and how far the others are).
-- One calibration per reference, the default (`calibration=
-  "per_reference"`; `"pooled"` for one set of coefficients for all): each
-  reference's coefficients are fitted on the measurements selected for it
-  and used there; every other measurement uses those of the closest
-  reference.  New columns `<name>_used` (measurements used in the refit)
-  and `<name>_calibration` (whose coefficients each measurement uses);
-  `wind_fits` and `wind_uncertainty` have one row per reference.  A
-  reference needs float data in 4 cycles (`calibration_min_cycles`) to get
-  coefficients; the measurements matched or closest to a reference
-  without coefficients get no refitted wind (`<name>_closest` gives the
-  closest reference, and `plot_wind_timeline` marks those periods in
-  grey).
-- `wind_uncertainty(components=...)` and `process_float(uncertainty=...)`
-  choose the uncertainty terms: only the cross-validated σ_cv by default;
-  the bootstrap coefficient term ("coef") and the reference error ("ref")
-  are optional (`"all"` for the three, as before).  Without "coef", no
-  bootstrap is run.
-- A reference with too few cycles is no longer marked as used: its
-  measurements are False in `<name>_used`, and `plot_reference_map` greys
-  it out ("Reference not calibrated (too few cycles)").  The warning
-  suggests lowering `calibration_min_cycles`.
-- Documentation: the low-wind floor (about 2–3 m s⁻¹) and the low bias at
-  high winds.
-- `min_cycles` counts only the cycles where the float has a spectral
-  level, not every cycle with a reference value (e.g. before the
-  delayed-mode data end).
-- Wind plots set their axis from the winds, not the ±1σ band, so a wide
-  band no longer squeezes the figure.
-- `plot_wind_timeline`: the float wind through the whole deployment, a
-  few months per row, with the refit periods shaded per reference and
-  whose coefficients apply along the top.
-- `reference_diagnostics` and `plot_reference_fits`: the wind model
-  fitted to each reference separately and to all together, in-sample and
-  cross-validated, and how each reference's coefficients do on the others.
-- Wind footprints: with a reanalysis (`footprints=`), each measurement is
-  matched to the reference whose wind footprint (correlation of the
-  reanalysis wind with the wind at the reference, `wind_footprints`) has
-  the highest R at its position, and the refit uses the measurements with
-  R at least `footprint_min_r` (0.9) instead of those within 40 km;
-  `plot_reference_map` shades each reference's footprint, cell by
-  cell, in that reference's colour (circles when selecting by distance).
+
+### Reference winds
+
 - Reference winds are converted to 10 m, the height the wind models are
   calibrated for: `wind_to_10m` (neutral logarithmic profile, or power
   law), from a `height_m` column or `reference_height_m=` (one value or
   one per reference).  Without a height, a `ReferenceHeightWarning` says
-  the winds are assumed to be 10 m already.
-- The example buoy winds (`examples/data/reference_winds_2026.csv`) give
-  their anemometer height (3.5 m) and are converted to 10 m.
-- `plot_reference_timeseries`: the reference wind and the float wind
-  (published and refitted model) against time, for the points used in the
-  refit, one row per reference, with ±1σ around the refitted wind (also
-  in `plot_all` after a refit).
-- `plot_reference_map` and `plot_reference_timeseries` show only the
-  measurements used in the refit: within the radius and with a float wind
-  (not, e.g., after the delayed-mode data end).  Circles are drawn at the
-  positions of the reference values used (several for a buoy reported at
-  several positions).  On the map, the trajectory is black where
-  the float has a wind and grey where it has none (e.g. no delayed-mode
-  profiles yet), and references passed only without a float wind are
-  greyed out.
-- `collocate_reference` adds `<name>_latitude` and `<name>_longitude`, the
-  position of the reference value used.
-- Maps use cartopy, with land and labelled gridlines (`map_axes`, used by
-  `plot_positions` and the tutorials); cartopy is now a dependency.
-- Tutorials: "Finding PAL floats and processing several" and
-  "Understanding the depth correction".
-- Tutorials: a second, shorter notebook, "Getting the PAL data" (every
-  band in a park table with the CTD/BGC data, and a profiles table, with
-  no further processing); the first is now "From PAL data to wind speed".
-- Documentation: every function on one API page, grouped by processing
-  step, and an Outputs page describing every table and column.
+  the winds are assumed to be 10 m already.  The example buoy winds
+  (`examples/data/reference_winds_2026.csv`) give their anemometer height
+  (3.5 m).
+- The measurements around each reference value are averaged before the
+  models are fitted and assessed (`average_to_reference`;
+  `reference_average=True` and `reference_window="1h"`, i.e. ±30 min, by
+  default; any width).  Comparing every 5-min measurement with an hourly
+  value treated measurements that share one reference value as
+  independent.
+- `collocate_reference` adds `<name>_time`, `<name>_latitude` and
+  `<name>_longitude`, the time and position of the reference value used,
+  and records each reference's position (the most frequent one, and how
+  far the others are).
+
+### Calibration
+
+- One calibration per reference, the default (`calibration=
+  "per_reference"`; `"pooled"` for one set of coefficients for all): each
+  reference's coefficients are fitted on the measurements selected for it
+  and used for the measurements closest to it.  New columns `<name>_used`
+  (measurements used in a refit), `<name>_closest` (closest reference)
+  and `<name>_calibration` (whose coefficients apply); `wind_fits` and
+  `wind_uncertainty` have one row per reference.
+- A reference needs float data in 4 cycles (`calibration_min_cycles`) to
+  get coefficients, counting only cycles where the float has a spectral
+  level.  The measurements closest to a reference without coefficients
+  get no refitted wind, and the warning suggests lowering
+  `calibration_min_cycles`.
+- Wind footprints: with a reanalysis (`footprints=`), each measurement is
+  matched to the reference whose wind footprint (correlation of the
+  reanalysis wind with the wind at the reference, `wind_footprints`) has
+  the highest R at its position, and the refit uses the measurements with
+  R at least `footprint_min_r` (0.9) instead of those within 40 km.
+- `reference_diagnostics` and `plot_reference_fits`: the wind model
+  fitted to each reference separately and to all together, in-sample and
+  cross-validated, and how each reference's coefficients do on the
+  others.
+
+### Uncertainty
+
+- `wind_uncertainty(components=...)` and `process_float(uncertainty=...)`
+  choose the uncertainty terms: only the cross-validated σ_cv by default;
+  the bootstrap coefficient term ("coef") and the reference error ("ref")
+  are optional (`"all"` for the three, as in 0.1.0b1).  Without "coef",
+  no bootstrap is run.
+
+### Figures
+
+- `plot_reference_map`: the float's trajectory (black with a float wind,
+  grey without) and the references, with the measurements used for the
+  refit, the fitting radius or each reference's footprint, and the
+  references not used greyed out (no float wind, or too few cycles).
+- `plot_reference_timeseries`: reference and float winds (published and
+  refitted) against time, one row per reference, with ±1σ.
+- `plot_wind_timeline`: the float wind through the whole deployment, a
+  few months per row, with the refit periods shaded per reference, whose
+  coefficients apply along the top, and in grey where none do.
+- Wind plots set their axis from the winds, not the ±1σ band.
+- Maps use cartopy, with land and labelled gridlines (`map_axes`);
+  cartopy is now a dependency.
+
+### Documentation and tutorials
+
+- Documentation reorganised: a quick-start guide with the main choices
+  side by side, an Options page listing every option with its default,
+  an Outputs page describing every table and column, a "How it works"
+  page in the order of processing, and every function on one API page.
+- The limits of acoustic wind are documented: the floor at about
+  2–3 m s⁻¹ and the low bias at high winds.
+- Tutorials: "Finding PAL floats and processing several", "Getting the
+  PAL data" (every band and the CTD/BGC data, with no further
+  processing) and "Understanding the depth correction"; the first
+  tutorial is now "From PAL data to wind speed".
 
 ## 0.1.0b1 (2026-11-22)
 

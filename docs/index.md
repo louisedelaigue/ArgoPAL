@@ -60,7 +60,7 @@ Work using ArgoPAL should cite this paper and the software, with the
 version used:
 
 > Delaigue, L. (2026).  ArgoPAL: wind speed from passive acoustics on
-> BGC-Argo floats (version 0.1.0b1).
+> BGC-Argo floats (version 0.1.0b2).
 > [github.com/louisedelaigue/ArgoPAL](https://github.com/louisedelaigue/ArgoPAL)
 
 ```{toctree}

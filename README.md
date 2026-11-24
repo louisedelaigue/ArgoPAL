@@ -76,7 +76,7 @@ The tutorials are also in [`examples/`](examples/).
 
 ## Status and limitations
 
-Version 0.1.0b1 is a beta: the processing chain is complete and tested,
+Version 0.1.0b2 is a beta: the processing chain is complete and tested,
 but function names and options may still change before 1.0.  Changes are
 listed in the [version history](https://argopal.readthedocs.io/en/latest/versions.html).
 
@@ -128,7 +128,7 @@ maintained by Louise Delaigue.
 Work using ArgoPAL should cite the software:
 
 > Delaigue, L. (2026). ArgoPAL: wind speed from passive acoustics on
-> BGC-Argo floats (version 0.1.0b1).
+> BGC-Argo floats (version 0.1.0b2).
 > https://github.com/louisedelaigue/ArgoPAL
 
 and, for the method:
