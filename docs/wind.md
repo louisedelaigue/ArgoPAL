@@ -152,6 +152,11 @@ result = argopal.process_float(
 argopal.plot_reference_map(result["park"], footprints=result["footprints"])
 ```
 
+On the map, each reference's footprint is shaded in its colour, grid cell
+by grid cell: the cells where that reference's R is the highest and at
+least `footprint_min_r`, i.e. where a float would be matched to it.  With
+a distance selection, a circle of that radius is drawn instead.
+
 For each reference, the correlation R between the reanalysis wind at the
 reference's position and at every grid cell is computed
 (`wind_footprints`); the reference's own wind is not used.  By default

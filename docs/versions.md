@@ -32,7 +32,8 @@
   reanalysis wind with the wind at the reference, `wind_footprints`) has
   the highest R at its position, and the refit uses the measurements with
   R at least `footprint_min_r` (0.9) instead of those within 40 km;
-  `plot_reference_map` outlines the footprints.
+  `plot_reference_map` shades each reference's footprint, cell by
+  cell, in that reference's colour (circles when selecting by distance).
 - Reference winds are converted to 10 m, the height the wind models are
   calibrated for: `wind_to_10m` (neutral logarithmic profile, or power
   law), from a `height_m` column or `reference_height_m=` (one value or

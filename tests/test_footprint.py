@@ -163,6 +163,12 @@ def test_reference_map_with_footprints():
     _, ax = argopal.plot_reference_map(out, footprints=fp)
     labels = [ln.get_label() for ln in ax.lines]
     assert any("inside footprint" in x for x in labels)
+    # footprint cells shaded (no circle), one legend entry per reference
+    from matplotlib.collections import QuadMesh
+
+    assert any(isinstance(c, QuadMesh) for c in ax.collections)
+    legend = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert "A footprint (R ≥ 0.9)" in legend
     assert [t.get_text() for t in ax.texts if t.get_text() in "AB"] == ["A"]
 
 

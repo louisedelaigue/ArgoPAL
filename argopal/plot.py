@@ -489,7 +489,7 @@ def map_axes(
             "physical", "land", "50m", edgecolor="none",
             facecolor="lightgrey",
         ),
-        zorder=0,
+        zorder=1.5,  # above shaded fields (zorder 1), below tracks (2+)
     )  # fmt: skip
     gl = ax.gridlines(
         draw_labels=True, alpha=0.5, linestyle="--", x_inline=False,
@@ -662,8 +662,11 @@ def plot_reference_map(
         when the refit selected by footprint.
     footprints : xr.DataArray, optional
         Wind footprints (`wind_footprints`, or `result["footprints"]`).
-        When the refit selected by footprint, each reference's footprint
-        (R at least the threshold used) is outlined instead of a circle.
+        When the refit selected by footprint, the grid cells of each
+        reference's footprint are shaded in that reference's colour
+        instead of a circle: the cells where its R is the highest and at
+        least the threshold used, as when matching measurements to
+        references.
     annotate : bool, optional
         Add a title and notes, by default False.
 
@@ -751,21 +754,48 @@ def plot_reference_map(
         )  # fmt: skip
         geod = Geodesic()
         labelled = set()
+        by_fp = min_r is not None and footprints is not None
+        colour_of = {}
+        if by_fp:
+            # each grid cell belongs to the reference whose footprint has the
+            # highest R there (if at least min_r), as when matching
+            fp_names = [str(x) for x in footprints["reference"].to_numpy()]
+            r_all = np.where(
+                np.isfinite(footprints.to_numpy()), footprints.to_numpy(),
+                -np.inf,
+            )  # fmt: skip
+            best, top = r_all.argmax(axis=0), r_all.max(axis=0)
+            palette = [
+                c for c in plt.get_cmap("tab10").colors
+                if c != mpl.colors.to_rgb("tab:red")
+            ]  # fmt: skip
+            colour_of = {
+                n: palette[k % len(palette)] for k, n in enumerate(shown)
+            }
+            colour_of.update({n: BEFORE for n in unused})
+            for name, col in colour_of.items():
+                if name not in fp_names:
+                    continue
+                cells = (best == fp_names.index(name)) & (top >= min_r)
+                if not cells.any():
+                    continue
+                ax.pcolormesh(
+                    footprints["longitude"], footprints["latitude"],
+                    np.ma.masked_where(~cells, np.ones(cells.shape)),
+                    cmap=mpl.colors.ListedColormap([col]), shading="nearest",
+                    alpha=0.3 if name in shown else 0.18, transform=pc,
+                    zorder=1, rasterized=True,
+                )  # fmt: skip
+                ax.fill(
+                    [], [], color=col, alpha=0.4,
+                    label=f"{name} footprint (R ≥ {min_r:g})",
+                )  # fmt: skip
         for group, colour, label in (
             (shown, "tab:red", "Reference used for fitting"),
             (unused, BEFORE, "Reference not used (no float wind)"),
         ):
             for name, positions in group.items():
-                if min_r is not None and (
-                    footprints is not None
-                    and name in footprints["reference"].to_numpy()
-                ):
-                    f = footprints.sel(reference=name)
-                    ax.contour(
-                        f["longitude"], f["latitude"], f, levels=[min_r],
-                        colors=[colour], linestyles="--",
-                        linewidths=0.9, transform=pc, zorder=3,
-                    )  # fmt: skip
+                mark = colour_of.get(name, colour) if by_fp else colour
                 for k, (la, lo) in enumerate(positions):
                     if min_r is None:
                         ring = np.asarray(geod.circle(lo, la, radius_km * 1e3))
@@ -777,9 +807,9 @@ def plot_reference_map(
                         )  # fmt: skip
                     ax.plot(
                         lo, la, ls="none", marker="^",
-                        ms=9 if k == 0 else 6, color=colour, mec="white",
+                        ms=9 if k == 0 else 6, color=mark, mec="white",
                         mew=0.8, transform=pc, zorder=5,
-                        label=None if label in labelled else label,
+                        label=None if (label in labelled or by_fp) else label,
                     )  # fmt: skip
                     labelled.add(label)
                 la, lo = positions[0]
@@ -790,6 +820,16 @@ def plot_reference_map(
                     fontweight="bold", color=AFTER if colour != BEFORE
                     else BEFORE, zorder=6,
                 )  # fmt: skip
+        if by_fp:  # one triangle in the legend, the footprints give colours
+            for group, colour, label in (
+                (shown, AFTER, "Reference used for fitting"),
+                (unused, BEFORE, "Reference not used (no float wind)"),
+            ):
+                if group:
+                    ax.plot(
+                        [], [], ls="none", marker="^", ms=9, color=colour,
+                        mec="white", label=label,
+                    )  # fmt: skip
         if len(p):
             ax.annotate(
                 "START", (p["longitude"].iloc[0], p["latitude"].iloc[0]),
@@ -801,8 +841,13 @@ def plot_reference_map(
             several = [k for k, v in shown.items() if len(v) > 1]
             note = (
                 f"{len(used)} of {len(p)} measurements used for fitting, "
-                f"{within.replace('inside footprint', 'inside the footprint')} "
-                "of " + (", ".join(shown) if shown else "no reference") + "."
+                + (
+                    f"inside the footprint (R ≥ {min_r:g}) of "
+                    if min_r is not None
+                    else f"within {radius_km:g} km of "
+                )
+                + (", ".join(shown) if shown else "no reference")
+                + "."
             )
             if unused:
                 note += (
@@ -812,7 +857,9 @@ def plot_reference_map(
                 )
             if several:
                 note += (
-                    " Reported at several positions (one circle each): "
+                    " Reported at several positions (one "
+                    + ("marker" if by_fp else "circle")
+                    + " each): "
                     + ", ".join(several)
                     + "."
                 )
