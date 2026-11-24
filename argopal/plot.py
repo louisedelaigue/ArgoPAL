@@ -1202,8 +1202,10 @@ def plot_wind(park_table, resample="6h", reference=None, annotate=False):
         )  # fmt: skip
         axes = list(axes[:, 0])
         for ax, (suffix, label) in zip(axes, panels):
+            top = []  # highest wind drawn (the σ band may go beyond)
             if reference and f"U_{reference}" in series:
                 u = _series(f"U_{reference}")
+                top.append(np.nanmax(u.to_numpy(float), initial=0))
                 ax.plot(
                     u.index, u, color=AFTER, lw=1.2,
                     label=_reference_label(park_table, reference),
@@ -1211,6 +1213,7 @@ def plot_wind(park_table, resample="6h", reference=None, annotate=False):
             for name in names if not suffix else fitted:
                 color = cmap(_WIND_SHADES.get(name, 0.3))
                 u = _series(f"U_{name}{suffix}")
+                top.append(np.nanmax(u.to_numpy(float), initial=0))
                 ax.plot(
                     u.index, u, color=color, lw=1.2,
                     label=applied[name]["reference"],
@@ -1222,7 +1225,7 @@ def plot_wind(park_table, resample="6h", reference=None, annotate=False):
                         u.index, u - sig, u + sig, color=color, alpha=0.15,
                         lw=0,
                     )  # fmt: skip
-            ax.set_ylim(bottom=0)
+            ax.set_ylim(0, np.ceil(max(top, default=1) * 1.08) or 1)
             ax.set_ylabel(
                 f"Wind speed, {label} (m s$^{{-1}}$)"
                 + (
@@ -1689,6 +1692,7 @@ def plot_wind_timeline(
     ref_col = f"U_{reference}" if reference else None
     used_col = f"{reference}_used" if reference else None
     cal_col = f"{reference}_calibration" if reference else None
+    closest_col = f"{reference}_closest" if reference else None
     sig_col = f"{fit_col}_sigma"
     p = park_table.dropna(subset=["datetime"]).set_index("datetime")
     numeric = [
@@ -1696,7 +1700,7 @@ def plot_wind_timeline(
         if c is not None and c in p
     ]  # fmt: skip
     hourly = p[numeric].resample("1h").mean()
-    for col in (used_col, cal_col):
+    for col in (used_col, cal_col, closest_col):
         if col is not None and col in p:
             hourly[col] = (
                 p[col]
@@ -1712,7 +1716,8 @@ def plot_wind_timeline(
     edges = list(pd.date_range(start, end, freq=f"{months}MS"))
     if edges[-1] < end:
         edges.append(edges[-1] + pd.DateOffset(months=months))
-    top = np.nanmax(hourly[numeric].to_numpy(float)) if numeric else 1
+    winds = [c for c in numeric if c != sig_col]  # not the σ band
+    top = np.nanmax(hourly[winds].to_numpy(float)) if winds else 1
     # only rows with something to show
     has = hourly[numeric].notna().any(axis=1)
     pairs = [
@@ -1744,6 +1749,7 @@ def plot_wind_timeline(
         )  # fmt: skip
         axes = list(axes[:, 0])
         seen = set()
+        seen_none = False
         for ax, (t0, t1) in zip(axes, pairs):
             h = hourly[(hourly.index >= t0) & (hourly.index < t1)]
             # periods used for the refit, in the reference's colour
@@ -1758,6 +1764,15 @@ def plot_wind_timeline(
             # whose coefficients the wind uses, along the top (where there
             # is a float wind)
             if cal_col in h:
+                no_cal = h[cal_col].isna() & h[pub_col].notna()
+                if closest_col in h:  # closest reference not calibrated
+                    no_cal &= h[closest_col].notna()
+                    for a, b in runs(no_cal):
+                        ax.axvspan(
+                            a, b, ymin=0.96, ymax=1, color=BEFORE, lw=0,
+                            zorder=1,
+                        )  # fmt: skip
+                    seen_none = seen_none or bool(no_cal.any())
                 for name, col in colours.items():
                     m = (h[cal_col] == name) & h[pub_col].notna()
                     for a, b in runs(m):
@@ -1794,6 +1809,10 @@ def plot_wind_timeline(
                 handles.append(mpl.patches.Patch(color=col, alpha=0.5))
                 labels.append(f"{name}: used for refit (shaded), "
                               "coefficients (top strip)")  # fmt: skip
+        if seen_none:
+            handles.append(mpl.patches.Patch(color=BEFORE))
+            labels.append("No calibration: closest reference not calibrated "
+                          "(no refitted wind)")  # fmt: skip
         axes[0].legend(handles, labels, loc="upper left", fontsize=7,
                        ncol=3)  # fmt: skip
         _panel_labels(axes)
@@ -1801,7 +1820,8 @@ def plot_wind_timeline(
             how = fits.get("calibration")
             note = "Hourly means.  " + (
                 "One calibration per reference: outside the shaded "
-                "periods, the coefficients of the closest reference."
+                "periods, the coefficients of the closest reference; none "
+                "where it has no calibration."
                 if how == "per_reference"
                 else "One calibration for all references."
                 if how == "pooled"

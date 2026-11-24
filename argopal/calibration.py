@@ -377,6 +377,7 @@ def fit_wind_models(
     window="1h",
     min_footprint_r=None,
     calibration="per_reference",
+    min_cycles=4,
 ):
     """Refit the literature wind models to a collocated reference wind.
 
@@ -422,17 +423,30 @@ def fit_wind_models(
         fitted on the measurements selected for it (within its radius or
         footprint).  Those measurements use their reference's
         coefficients; every other measurement uses those of the closest
-        reference that has coefficients.  "pooled": one set of
+        reference.  Where that reference has no coefficients (too few
+        cycles), there is no refitted wind.  "pooled": one set of
         coefficients fitted to all references together, used everywhere.
         With a single reference, both are the same.
+    min_cycles : int, optional
+        With one calibration per reference, a reference needs points in at
+        least this many float cycles to get its own coefficients, by
+        default 4: points from fewer cycles are too few independent
+        samples, and a refit on them (and its bootstrap uncertainty) is
+        unreliable.  Its measurements, and those closest to it, then get no
+        refitted wind.  If no reference has enough cycles, one set of
+        coefficients is fitted to all references together (as "pooled"),
+        with a warning.
 
     Returns
     -------
     pal : pd.DataFrame
         A copy with, for every measurement, "U_<model>_fit",
         "<reference>_used" (True for the measurements compared with a
-        reference in the refit) and "<reference>_calibration" (the
-        reference whose coefficients it uses, "all" if pooled);
+        reference in the refit), "<reference>_closest" (the reference it
+        belongs to: its own where used in the refit, else the closest) and
+        "<reference>_calibration" (the reference whose coefficients it
+        uses: the same if calibrated, else None and no refitted wind;
+        "all" if pooled);
         `attrs["wind_fits"]["coefficients"]` holds them, model ->
         reference -> coefficients.
     fits : pd.DataFrame
@@ -442,8 +456,8 @@ def fit_wind_models(
         coefficients), published and refitted coefficients, and the skill
         of both on the fitting points (rmse, r2, bias).  A reference whose
         model could not be refitted (too few points) keeps its row, with
-        fitted None and NaN skill; its measurements use the closest
-        reference that has coefficients.
+        fitted None and NaN skill; the measurements belonging to it get no
+        refitted wind.
     """
     reference, ref_col = _reference_column(pal, reference)
     applied = pal.attrs.get("wind_models", {}).get("applied", {})
@@ -485,6 +499,35 @@ def fit_wind_models(
         else np.full(len(pts), "all", dtype=object)
     )  # fmt: skip
     groups = sorted(set(group)) if len(group) else []
+    # a reference needs enough cycles to get its own coefficients
+    cyc = pts["cycle"].to_numpy() if "cycle" in pts else np.zeros(len(pts))
+    has_ref = pts[ref_col].notna().to_numpy()
+    n_cycles = {g: len(pd.unique(cyc[(group == g) & has_ref])) for g in groups}
+    skipped = set()
+    if per_ref:
+        skipped = {g for g in groups if n_cycles[g] < min_cycles}
+        if skipped and len(skipped) == len(groups):
+            warnings.warn(
+                f"No reference has float data in {min_cycles} cycles or "
+                "more ("
+                + ", ".join(f"{g}: {n_cycles[g]}" for g in groups)
+                + "): one set of coefficients is fitted to all references "
+                "together instead.  Lower min_cycles for one calibration "
+                "per reference."
+            )
+            per_ref = False
+            group = np.full(len(pts), "all", dtype=object)
+            groups = ["all"]
+            n_cycles = {"all": len(pd.unique(cyc[has_ref]))}
+            skipped = set()
+        elif skipped:
+            warnings.warn(
+                "Fewer than "
+                f"{min_cycles} cycles for "
+                + ", ".join(f"{g} ({n_cycles[g]})" for g in sorted(skipped))
+                + ": no coefficients; the measurements matched or closest "
+                "to them get no refitted wind."
+            )
     rows, coefs = [], {}
     spl_of = {}
     for name in models:
@@ -509,6 +552,7 @@ def fit_wind_models(
                 "reference": reference,
                 "reference_name": g,
                 "n": int(sel.sum()),
+                "n_cycles": n_cycles.get(g, 0),
                 "n_measurements": int(n_meas),
                 "published": p0,
                 "fitted": None,
@@ -519,6 +563,12 @@ def fit_wind_models(
                 },
             }
             label = name if g == "all" else f"{name}, {g}"
+            if g in skipped:  # too few cycles: compared, not fitted
+                for k, v in wind_metrics(lit[sel], y[sel]).items():
+                    if f"{k}_published" in info:
+                        info[f"{k}_published"] = v
+                rows.append(info)
+                continue
             if sel.sum() <= len(p0):
                 warnings.warn(
                     f"{label}: too few collocations ({sel.sum()}) to fit."
@@ -543,7 +593,9 @@ def fit_wind_models(
 
     # which coefficients each measurement uses
     fitted_any = sorted({g for c in coefs.values() for g in c})
-    cal = _calibration_of(out, reference, used, fitted_any, per_ref)
+    closest, cal = _calibration_of(out, reference, used, fitted_any, per_ref)
+    if per_ref:
+        out[f"{reference}_closest"] = closest
     out[f"{reference}_calibration"] = cal
     for name, by_group in coefs.items():
         if not by_group:
@@ -577,48 +629,48 @@ def fit_wind_models(
 
 
 def _calibration_of(pal, reference, used, groups, per_ref):
-    """The reference whose coefficients each measurement uses: its own
-    reference where it was used in the refit, else the closest reference
-    with coefficients ("all" when pooled)."""
-    cal = pd.Series(None, index=pal.index, dtype=object)
-    if not groups:
-        return cal
+    """Whose coefficients each measurement uses.
+
+    Returns (closest, calibration): the reference each measurement belongs
+    to (its own reference where it was used in the refit, otherwise the
+    closest reference of all), and that reference if it has coefficients,
+    else None: no calibration, no refitted wind.  "all" when pooled.
+    """
+    closest = pd.Series(None, index=pal.index, dtype=object)
     if not per_ref:
-        cal[:] = "all"
-        return cal
+        cal = pd.Series(
+            "all" if groups else None, index=pal.index, dtype=object
+        )
+        return closest, cal
     name_col = f"{reference}_reference_name"
     positions = (
         pal.attrs.get("references", {}).get(reference, {}).get("positions", {})
     )
     known = [
-        g for g in groups if positions.get(g, {}).get("latitude") is not None
-    ]
+        g for g, v in positions.items() if v.get("latitude") is not None
+    ]  # every reference, calibrated or not
     if known:
         lat = pal["latitude"].to_numpy(float)
         lon = pal["longitude"].to_numpy(float)
         dist = np.stack(
             [
                 _haversine(
-                    lat,
-                    lon,
-                    positions[g]["latitude"],
+                    lat, lon, positions[g]["latitude"],
                     positions[g]["longitude"],
                 )
                 for g in known
             ]
-        )
-        ok = np.isfinite(dist).any(axis=0)
-        nearest = np.where(
-            ok, np.asarray(known, dtype=object)[np.nanargmin(
-                np.where(np.isfinite(dist), dist, np.inf), axis=0
-            )], None,
         )  # fmt: skip
-        cal[:] = nearest
-    own = pal[name_col].astype(object) if name_col in pal else None
-    if own is not None:
-        mine = used & own.isin(groups).to_numpy()
-        cal[mine] = own[mine]
-    return cal
+        dist = np.where(np.isfinite(dist), dist, np.inf)
+        ok = np.isfinite(dist).any(axis=0)
+        nearest = np.asarray(known, dtype=object)[dist.argmin(axis=0)]
+        closest[:] = np.where(ok, nearest, None)
+    if name_col in pal:
+        own = pal[name_col].astype(object)
+        mine = used & own.notna().to_numpy()
+        closest[mine] = own[mine]
+    cal = closest.where(closest.isin(groups), None)
+    return closest, cal
 
 
 def _haversine(lat1, lon1, lat2, lon2):

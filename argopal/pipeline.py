@@ -52,6 +52,7 @@ def process_float(
     reference_max_time="1h",
     reference_height_m=None,
     calibration="per_reference",
+    calibration_min_cycles=4,
     footprints=None,
     footprint_min_r=0.9,
     footprint_anomaly=None,
@@ -180,6 +181,9 @@ def process_float(
         measurement uses the coefficients of the closest reference.
         "pooled": one set of coefficients for all references, used
         everywhere.  See `fit_wind_models`.
+    calibration_min_cycles : int, optional
+        Float cycles a reference needs to get its own coefficients, by
+        default 4; below, its measurements use the closest reference's.
     footprints : str, xr.Dataset or xr.DataArray, optional
         Select the measurements compared with each reference by wind
         footprint instead of distance: a reanalysis wind (file(s) or
@@ -340,6 +344,7 @@ def process_float(
             window=reference_window,
             min_footprint_r=min_r,
             calibration=calibration,
+            min_cycles=calibration_min_cycles,
         )
         extra["wind_skill"] = wind_skill(
             pal,

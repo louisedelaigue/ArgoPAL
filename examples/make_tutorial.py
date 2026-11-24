@@ -315,7 +315,11 @@ md("""
 **One calibration per buoy.**  Each buoy's coefficients are fitted on the
 float data near it, and used there (`n` points).  Every other measurement
 uses the coefficients of the closest buoy (`n_applied` in all), and
-`buoys_calibration` says whose.  `calibration="pooled"` would fit one set
+`buoys_calibration` says whose.  A buoy needs float data in at least 4
+cycles to get coefficients; the measurements closest to a buoy without
+any get no refitted wind.  Here LION, never within 40 km, has none: the
+measurements closest to it (`buoys_closest`) have no refitted wind (grey
+along the top of the figure below).  `calibration="pooled"` would fit one set
 of coefficients to both buoys together.
 
 The whole record, two months per row: the refitted wind with ±1σ, the

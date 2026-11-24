@@ -904,3 +904,58 @@ def test_wind_timeline():
     )
     _, axes = argopal.plot_wind_timeline(longer, months=1)
     assert len(axes) >= 2
+
+
+def test_minimum_cycles_for_own_calibration():
+    pal, _ = _two_buoy_float()  # 4 cycles at A, 4 at B
+    # B in only 2 cycles: no coefficients of its own, A's are used
+    fewer = pal.copy()
+    at_b = fewer["b_reference_name"] == "B"
+    fewer.loc[at_b, "cycle"] = np.where(fewer.loc[at_b, "cycle"] < 7, 5, 6)
+    with pytest.warns(UserWarning, match=r"B \(2\)"):
+        out, fits = argopal.fit_wind_models(fewer, models=["nystuen2015"])
+    coefs = out.attrs["wind_fits"]["coefficients"]["nystuen2015"]
+    assert set(coefs) == {"A"}
+    row_b = fits.set_index("reference_name").loc["B"]
+    assert row_b["fitted"] is None and row_b["n_cycles"] == 2
+    assert np.isfinite(row_b["rmse_published"])  # still compared
+    # B's measurements (and those closest to B) get no refitted wind
+    near_b = out["b_closest"] == "B"
+    assert near_b.any() and (out["b_closest"] == "A").any()
+    assert out.loc[near_b, "b_calibration"].isna().all()
+    assert out.loc[near_b, "U_nystuen2015_fit"].isna().all()
+    near_a = out["b_closest"] == "A"
+    assert (out.loc[near_a, "b_calibration"] == "A").all()
+    assert out.loc[near_a & out["U_nystuen2015"].notna(),
+                   "U_nystuen2015_fit"].notna().all()  # fmt: skip
+    # the timeline marks where there is no calibration
+    _, axes = argopal.plot_wind_timeline(out)
+    legend = [t.get_text() for t in axes[0].figure.legends[0].get_texts()] if (
+        axes[0].figure.legends) else [
+        t.get_text() for t in axes[0].get_legend().get_texts()]  # fmt: skip
+    assert any(x.startswith("No calibration") for x in legend)
+    # no reference with enough cycles: one fit for all, with a warning
+    with pytest.warns(UserWarning, match="all references together"):
+        pooled, pfits = argopal.fit_wind_models(
+            pal, models=["nystuen2015"], min_cycles=5
+        )
+    assert list(pfits["reference_name"]) == ["all"]
+    assert pooled.attrs["wind_fits"]["calibration"] == "pooled"
+    assert (pooled["b_calibration"] == "all").all()
+
+
+def test_plot_limits_follow_the_wind_not_sigma():
+    pal, _ = _two_buoy_float()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out, _ = argopal.fit_wind_models(pal, models=["nystuen2015"])
+        out, _ = argopal.wind_uncertainty(out, n_bootstrap=5)
+    out["U_nystuen2015_fit_sigma"] = 1000.0  # an absurd uncertainty
+    for plot in (
+        argopal.plot_wind,
+        argopal.plot_wind_timeline,
+        argopal.plot_reference_timeseries,
+    ):
+        _, axes = plot(out)
+        for ax in np.atleast_1d(axes):
+            assert ax.get_ylim()[1] < 100, plot.__name__

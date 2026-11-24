@@ -98,7 +98,8 @@ Values come from the chosen data mode only (`mode=`): with
 | `<name>_reference_name` | | reference used (if the table names its references) |
 | `<name>_sigma` | m s⁻¹ | error of the reference value (if the table gives `wind_speed_sigma`) |
 | `<name>_used` | | True for the measurements used in the refit (within the radius or inside the footprint of their reference, with a float level) |
-| `<name>_calibration` | | the reference whose coefficients the measurement's refitted wind uses: its own where used in the refit, otherwise the closest reference with coefficients ("all" if pooled) |
+| `<name>_closest` | | the reference closest to the measurement (its own where used in the refit); per-reference calibration only |
+| `<name>_calibration` | | the reference whose coefficients the measurement's refitted wind uses: `<name>_closest` if that reference has coefficients, empty otherwise (no refitted wind); "all" if pooled |
 | `U_<model>_fit` | m s⁻¹ | wind speed from the refitted model, for every measurement, with the coefficients of `<name>_calibration` |
 | `U_<model>_fit_sigma_cv` | m s⁻¹ | empirical error (leave-one-cycle-out), depends on wind speed |
 | `U_<model>_fit_sigma_coef` | m s⁻¹ | uncertainty from the fitted coefficients (bootstrap over cycles) |

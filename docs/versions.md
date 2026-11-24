@@ -30,7 +30,14 @@
   and used there; every other measurement uses those of the closest
   reference.  New columns `<name>_used` (measurements used in the refit)
   and `<name>_calibration` (whose coefficients each measurement uses);
-  `wind_fits` and `wind_uncertainty` have one row per reference.
+  `wind_fits` and `wind_uncertainty` have one row per reference.  A
+  reference needs float data in 4 cycles (`calibration_min_cycles`) to get
+  coefficients; the measurements matched or closest to a reference
+  without coefficients get no refitted wind (`<name>_closest` gives the
+  closest reference, and `plot_wind_timeline` marks those periods in
+  grey).
+- Wind plots set their axis from the winds, not the ±1σ band, so a wide
+  band no longer squeezes the figure.
 - `plot_wind_timeline`: the float wind through the whole deployment, a
   few months per row, with the refit periods shaded per reference and
   whose coefficients apply along the top.

@@ -98,9 +98,21 @@ fit).
 on the measurements selected for it (within its radius or inside its
 footprint).  Those measurements use their reference's coefficients;
 every other measurement, used in no refit, uses the coefficients of the
-closest reference that has some.  `ref_calibration` says whose
+closest reference (`ref_closest`).  `ref_calibration` says whose
 coefficients each measurement uses, and `ref_used` which measurements the
-refit used.  `calibration="pooled"` fits one set of coefficients to all
+refit used.  A reference needs float data in at least 4 cycles
+(`calibration_min_cycles`) to get its own coefficients: hourly points
+within one cycle are not independent, and a refit on 2–3 cycles (and its
+bootstrap uncertainty) is unreliable.  A reference with fewer cycles is
+still compared with the float (`reference_diagnostics`), but it gets no
+coefficients, and neither its measurements nor those closest to it get a
+refitted wind (`U_<model>_fit` is NaN, `ref_calibration` empty): the
+refitted wind is only given where a calibration applies, the
+measurements used for a reference's refit and those closest to that
+reference.  This happens, for example, when the float has no
+delayed-mode data yet near a reference.  If no reference has enough
+cycles, one set of coefficients is fitted to all together, with a
+warning.  `calibration="pooled"` fits one set of coefficients to all
 references together and uses it everywhere.
 
 ```python
