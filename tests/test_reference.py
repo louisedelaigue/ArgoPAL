@@ -637,6 +637,45 @@ def test_reference_positions_and_map():
 
     _, ax = argopal.plot_reference_map(out, radius_km=20, annotate=True)
     texts = [t.get_text() for t in ax.texts]
-    assert "A" in texts and "B" in texts
+    assert "A" in texts and "B" in texts  # both used within 20 km
+    # within 1 km only the measurement at A is used: B is not shown
+    _, ax = argopal.plot_reference_map(out, radius_km=1)
+    texts = [t.get_text() for t in ax.texts]
+    assert "A" in texts and "B" not in texts
     with pytest.raises(KeyError, match="collocate_reference"):
         argopal.plot_reference_map(pal.assign(U_x=1.0))
+
+
+def test_reference_timeseries():
+    pal = _ten_minute_float()
+    # before refitting: the reference and the published model only
+    _, axes = argopal.plot_reference_timeseries(pal)
+    assert len(axes) == 1
+    assert [ln.get_label() for ln in axes[0].lines][:2] == [
+        "BUOY (reference)",
+        "Nystuen et al. (2015), published",
+    ]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fitted, _ = argopal.fit_wind_models(pal)
+    _, axes = argopal.plot_reference_timeseries(fitted, annotate=True)
+    labels = [ln.get_label() for ln in axes[0].lines]
+    assert "Nystuen et al. (2015), refitted" in labels
+    # one point per hourly buoy value, as in the fit
+    n_points = len(argopal.average_to_reference(fitted))
+    ref_line = axes[0].lines[0]
+    assert np.isfinite(ref_line.get_ydata()).sum() == n_points
+    with pytest.raises(ValueError, match="within"):
+        argopal.plot_reference_timeseries(fitted, radius_km=-1)
+
+
+def test_reference_timeseries_one_panel_per_reference():
+    pal = _pal(
+        [T0 + pd.Timedelta("10min"), T0 + pd.Timedelta("4h20min")],
+        lat=[43.38 + 25 / 111.2, 43.38],
+    )
+    pal["U_nystuen2015"] = 5.0
+    out = argopal.collocate_reference(pal, _several_references(), name="b")
+    _, axes = argopal.plot_reference_timeseries(out)
+    # B first (it is used first in time), then A
+    assert [ax.get_title().split(":")[0] for ax in axes] == ["B", "A"]

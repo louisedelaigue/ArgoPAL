@@ -19,11 +19,14 @@
   GDAC's synthetic-profile index.
 - Tested on the three other PAL floats on the GDAC (2904023, 2904024,
   7902388), including full 23-band spectra.
-- `plot_reference_map`: the float's trajectory and the reference stations
-  on a map, with the fitting radius and the measurements used for the
-  refit (also in `plot_all` when there is a reference).
+- `plot_reference_map`: the float's trajectory and the references used to
+  refit the wind models on a map, with the fitting radius and the
+  measurements used (also in `plot_all` when there is a reference).
   `collocate_reference` records each reference's position (the most
   frequent one, and how far the others are).
+- `plot_reference_timeseries`: the reference wind and the float wind
+  (published and refitted model) against time, for the points used in the
+  refit, one panel per reference (also in `plot_all` after a refit).
 - Maps use cartopy, with land and labelled gridlines (`map_axes`, used by
   `plot_positions` and the tutorials); cartopy is now a dependency.
 - Tutorials: "Finding PAL floats and processing several" and

@@ -287,12 +287,11 @@ p.groupby("buoys_reference_name")["buoys_distance_km"].describe()[
 
 md("""
 On a map: the trajectory, the measurements within 40 km of the buoy they
-were matched to (black, those used for the refit), and each buoy with a
-40 km circle.  The float later crosses LION's circle, but after the end of
-the buoy record, so with nothing to compare with.  With `annotate=True`,
-the figure also notes buoys reported at several positions: PACA appears
-at two positions about 25 km apart in the Météo-France file, and is shown
-at the more frequent one.
+were matched to (black, those used for the refit), and the buoys used,
+each with a 40 km circle (LION, never used, is not shown).  With
+`annotate=True`, the figure also notes buoys reported at several
+positions: PACA appears at two positions about 25 km apart in the
+Météo-France file, and is shown at the more frequent one.
 """)
 
 code("""
@@ -359,6 +358,17 @@ Restricted to the 40 km used for fitting, the statistics match `wind_fits`:
 
 code("""
 fig, axes = argopal.plot_wind_fit(cal["park"], max_distance_km=40)
+""")
+
+md("""
+The same points through time: the buoy wind, and Nystuen et al. (2015)
+with its published and refitted coefficients.  Each point belongs to the
+buoy the float was matched to, the closest one with a value within the
+hour, so one panel per buoy:
+""")
+
+code("""
+fig, axes = argopal.plot_reference_timeseries(cal["park"], annotate=True)
 """)
 
 code("""

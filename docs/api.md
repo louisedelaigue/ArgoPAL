@@ -157,6 +157,7 @@ One figure per processing step; each returns `(fig, axes)`.
 .. autofunction:: plot_depth_correction
 .. autofunction:: plot_wind
 .. autofunction:: plot_reference_map
+.. autofunction:: plot_reference_timeseries
 .. autofunction:: plot_wind_fit
 .. autofunction:: plot_ais
 .. autofunction:: save_figure

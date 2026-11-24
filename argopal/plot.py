@@ -565,12 +565,15 @@ def plot_positions(park_table, positions, annotate=False):
 def plot_reference_map(
     park_table, reference=None, radius_km=None, annotate=False
 ):
-    """Map of the float's trajectory and of the reference stations.
+    """Map of the float's trajectory and of the references used to refit
+    the wind models.
 
     The trajectory (grey), with the measurements within `radius_km` of
     the reference they were matched to (black: those used to refit the
-    wind models), and each reference (triangle) with a circle of that
-    radius around it.
+    wind models), and each reference used (triangle), i.e. with at least
+    one of those measurements, with a circle of that radius around it.
+    References in the table that the float never came close to are not
+    shown.
 
     Parameters
     ----------
@@ -616,6 +619,13 @@ def plot_reference_map(
         if dist is not None
         else p.iloc[:0]
     )
+    # only the references used: those with measurements within the radius
+    name_col = f"{reference}_reference_name"
+    if name_col in near:
+        used = set(near[name_col].dropna().astype(str))
+    else:  # a single reference, used if any measurement is close enough
+        used = set(stations) if len(near) else set()
+    stations = {k: v for k, v in stations.items() if k in used}
     slon = [v["longitude"] for v in stations.values()]
     slat = [v["latitude"] for v in stations.values()]
     with _style():
@@ -645,7 +655,8 @@ def plot_reference_map(
             ax.plot(
                 v["longitude"], v["latitude"], ls="none", marker="^", ms=9,
                 color="tab:red", mec="white", mew=0.8, transform=pc,
-                zorder=5, label="Reference" if i == 0 else None,
+                zorder=5,
+                label="Reference used for fitting" if i == 0 else None,
             )  # fmt: skip
             ax.annotate(
                 name, (v["longitude"], v["latitude"]), xytext=(7, 4),
@@ -668,7 +679,12 @@ def plot_reference_map(
             }  # fmt: skip
             note = (
                 f"{len(near)} of {len(p)} measurements within "
-                f"{radius_km:g} km of their reference."
+                f"{radius_km:g} km of their reference"
+                + (
+                    f" ({', '.join(stations)})."
+                    if stations
+                    else "; no reference used."
+                )
             )
             if spread:
                 note += (
@@ -1169,6 +1185,161 @@ def plot_wind_fit(
     return fig, axes
 
 
+def _break_gaps(t, y, gap):
+    """Insert NaN where consecutive times are more than `gap` apart, so
+    that lines are not drawn across gaps."""
+    t = pd.to_datetime(pd.Series(t)).reset_index(drop=True)
+    y = pd.Series(np.asarray(y, float))
+    cut = np.flatnonzero(t.diff() > gap)
+    if not len(cut):
+        return t, y
+    tt = list(t)
+    yy = list(y)
+    for k in cut[::-1]:
+        tt.insert(k, t[k - 1] + (t[k] - t[k - 1]) / 2)
+        yy.insert(k, np.nan)
+    return pd.Series(tt), pd.Series(yy)
+
+
+def plot_reference_timeseries(
+    park_table,
+    reference=None,
+    model="nystuen2015",
+    radius_km=None,
+    average=None,
+    window=None,
+    gap="3h",
+    annotate=False,
+):
+    """Wind against time where the float is near a reference: the
+    reference wind, and the float wind from one model with its published
+    and its refitted coefficients.
+
+    The points are those compared with the reference when fitting: the
+    measurements within `radius_km` of the reference they were matched to
+    (the closest one with a value in time), averaged around each reference
+    value (`average_to_reference`).  One panel per reference, as the float
+    is near each at different times.
+
+    Parameters
+    ----------
+    park_table : pd.DataFrame
+        PAL table after `collocate_reference` (and `fit_wind_models` for
+        the refitted wind).
+    reference : str, optional
+        Name given to `collocate_reference`; by default the one used for
+        fitting, or the only one.
+    model : str, optional
+        Wind model, by default "nystuen2015".
+    radius_km : float, optional
+        By default the one used by `fit_wind_models`, else 40 km.
+    average, window : optional
+        Averaging around each reference value; by default as for
+        `fit_wind_models` (see `average_to_reference`).
+    gap : str, optional
+        Lines are broken where points are further apart in time, by
+        default "3h".
+    annotate : bool, optional
+        Add a title and notes, by default False.
+
+    Returns
+    -------
+    fig, axes
+    """
+    from .calibration import average_to_reference, wind_metrics
+
+    reference = reference or _fit_reference(park_table)
+    ref_col = f"U_{reference}"
+    if ref_col not in park_table:
+        raise KeyError("No reference wind: run collocate_reference first.")
+    pub_col, fit_col = f"U_{model}", f"U_{model}_fit"
+    if pub_col not in park_table:
+        raise KeyError(f"No {pub_col!r}: run wind_literature first.")
+    fits = park_table.attrs.get("wind_fits", {})
+    if radius_km is None:
+        radius_km = fits.get("max_distance_km")
+        radius_km = 40.0 if radius_km is None else radius_km
+    if average is None:
+        average = fits.get("average", True)
+    if window is None:
+        window = fits.get("window", "1h")
+    pts = average_to_reference(
+        park_table, reference, radius_km, average=average, window=window
+    )
+    pts = pts.dropna(subset=[ref_col, "datetime"])
+    if pts.empty:
+        raise ValueError(
+            f"No measurement within {radius_km:g} km of the reference."
+        )
+    name_col = f"{reference}_reference_name"
+    groups = (
+        list(pts.groupby(name_col, sort=False)) if name_col in pts
+        else [(_reference_label(park_table, reference), pts)]
+    )  # fmt: skip
+    groups.sort(key=lambda g: g[1]["datetime"].min())
+    applied = park_table.attrs.get("wind_models", {}).get("applied", {})
+    label = applied.get(model, {}).get("reference", model)
+    colour = plt.get_cmap("viridis")(_WIND_SHADES.get(model, 0.3))
+    gap = pd.Timedelta(gap)
+    with _style():
+        widths = [
+            max((g["datetime"].max() - g["datetime"].min()).days, 1)
+            for _, g in groups
+        ]
+        fig, axes = plt.subplots(
+            1, len(groups), figsize=(12, 4.5), sharey=True,
+            layout="constrained", squeeze=False,
+            gridspec_kw={"width_ratios": widths},
+        )  # fmt: skip
+        axes = list(axes[0])
+        for ax, (name, g) in zip(axes, groups):
+            g = g.sort_values("datetime")
+            series = [
+                (ref_col, AFTER, "-", f"{name} (reference)"),
+                (pub_col, BEFORE, "--", f"{label}, published"),
+            ]
+            if fit_col in g:
+                series.append((fit_col, colour, "-", f"{label}, refitted"))
+            for col, c, ls, lab in series:
+                t, y = _break_gaps(g["datetime"], g[col], gap)
+                ax.plot(t, y, color=c, ls=ls, lw=1.2, label=lab)
+            d = g[f"{reference}_distance_km"]
+            ax.set_title(
+                f"{name}: {len(g)} points, {d.min():.0f}–{d.max():.0f} km",
+                fontsize=10,
+            )
+            ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=5))
+            ax.xaxis.set_major_formatter(
+                mdates.ConciseDateFormatter(ax.xaxis.get_major_locator())
+            )
+            ax.legend(loc="upper left", fontsize=8)
+        axes[0].set_ylabel("Wind speed (m s$^{-1}$)")
+        cols = [c for c in (ref_col, pub_col, fit_col) if c in pts]
+        top = np.nanmax(pts[cols].to_numpy(float))
+        axes[0].set_ylim(0, np.ceil(top * 1.05))
+        _panel_labels(axes)
+        if annotate:
+            parts = []
+            for col, what in ((pub_col, "published"), (fit_col, "refitted")):
+                if col in pts:
+                    m = wind_metrics(pts[col], pts[ref_col])
+                    parts.append(
+                        f"{what}: RMSE {m['rmse']:.2f}, bias {m['bias']:+.2f}"
+                    )
+            how = (
+                f"averaged over {window} around each reference value"
+                if average
+                else "single measurements"
+            )
+            _annotate(
+                fig,
+                f"{_wmo(park_table)}{label} against the reference",
+                f"Within {radius_km:g} km, {how}; "
+                + "; ".join(parts) + " (m s$^{-1}$).",
+            )  # fmt: skip
+    return fig, axes
+
+
 def plot_ais(park_table, band=None, annotate=False):
     """Ship-noise check: (a) the band level, with the measurements that had
     a ship nearby; (b) the number of ships nearby through the deployment.
@@ -1295,6 +1466,9 @@ def plot_all(
         figs["reference_map"] = plot_reference_map(result["park"], **a)[0]
     if any(c.endswith("_fit") for c in result["park"]):
         figs["wind_fit"] = plot_wind_fit(result["park"], **a)[0]
+        figs["reference_timeseries"] = plot_reference_timeseries(
+            result["park"], **a
+        )[0]
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
         for name, fig in figs.items():
