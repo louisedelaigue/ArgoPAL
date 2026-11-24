@@ -53,6 +53,22 @@ result = argopal.process_float(7902280, mode="raw", reference="buoys.csv")
 - `band_normalization`: whether the float divided band levels by their
   bandwidth.  Default: read from the float's `meta_aux` file.
 
+## Ship noise
+
+Only used with `ais`.
+
+- `ais`: AIS vessel positions: a table, decoded CSV files or raw NMEA
+  files (see [How it works](method.md#ship-noise)).  Default **`None`**.
+- `ais_radius_km`: distance within which a ship counts.  Default
+  **`20`**.
+- `ais_window`: time window either side of each measurement.  Default
+  **`"30min"`**.
+- `ais_action`: default **`"flag"`**.
+  - `"flag"`: add `ships_nearby` and `ship_flag`;
+  - `"remove"`: blank the flagged measurements (with a reference, only
+    those whose wind also deviates from the reference by more than the
+    RMSE).
+
 ## Wind models
 
 - `wind_models`: published models to apply.  Default: all three,
@@ -76,6 +92,17 @@ Only used with `reference`.
 - `fit_max_distance_km`: the float must be this close to a reference for
   its data to be used to calibrate it (km).  Default **`40`**; `None`
   uses all.
+- `footprints`: select the float data that calibrate each reference by
+  wind footprint instead of distance: a reanalysis 10 m wind (file(s) or
+  xarray dataset, e.g. ERA5 `u10`/`v10`) over the float's area and
+  period, or footprints from `wind_footprints`.  `fit_max_distance_km` is
+  then not used.  Default **`None`** (select by distance).
+- `footprint_min_r`: correlation defining a footprint.  Default
+  **`0.9`**.
+- `footprint_anomaly`: default **`None`**.
+  - `None`: correlate the wind as given, e.g. hourly over the deployment;
+  - `"monthly"`: correlate monthly anomalies, for a reanalysis over
+    several years.
 - `reference_window`: the measurements in this window around each
   reference value are averaged before fitting.  Default **`"1h"`** (±30
   min).
@@ -95,21 +122,6 @@ Only used with `reference`.
 - `fit_reference`: with several reference sources (a dict), the one to
   calibrate against.  Default: the first.
 
-## Wind footprints
-
-Select the data used to calibrate each reference by wind footprint
-instead of distance.
-
-- `footprints`: reanalysis 10 m wind (file(s) or xarray dataset, e.g.
-  ERA5 `u10`/`v10`) over the float's area and period, or footprints from
-  `wind_footprints`.  Default **`None`** (select by distance).
-- `footprint_min_r`: correlation defining a footprint.  Default
-  **`0.9`**.
-- `footprint_anomaly`: default **`None`**.
-  - `None`: correlate the wind as given, e.g. hourly over the deployment;
-  - `"monthly"`: correlate monthly anomalies, for a reanalysis over
-    several years.
-
 ## Uncertainty
 
 Only used with `reference`.
@@ -124,19 +136,3 @@ Only used with `reference`.
 - `reference_sigma`: error of the reference winds (m s⁻¹), for `"ref"`.
   Default: the table's `wind_speed_sigma`, else 0.
 - `n_bootstrap`: bootstrap refits, for `"coef"`.  Default **`100`**.
-
-## Ship noise
-
-Only used with `ais`.
-
-- `ais`: AIS vessel positions: a table, decoded CSV files or raw NMEA
-  files (see [How it works](method.md#ship-noise)).  Default **`None`**.
-- `ais_radius_km`: distance within which a ship counts.  Default
-  **`20`**.
-- `ais_window`: time window either side of each measurement.  Default
-  **`"30min"`**.
-- `ais_action`: default **`"flag"`**.
-  - `"flag"`: add `ships_nearby` and `ship_flag`;
-  - `"remove"`: blank the flagged measurements (with a reference, only
-    those whose wind also deviates from the reference by more than the
-    RMSE).

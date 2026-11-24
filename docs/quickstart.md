@@ -7,7 +7,9 @@ import argopal
 ```
 
 Each section shows the main choices; [Options](options.md) lists all of
-them, and [How it works](method.md) explains them.
+them, and [How it works](method.md) explains them.  The
+[tutorials](tutorials/multi_float_tutorial.ipynb) show how to find floats
+with PAL data and run each step on its own.
 
 ## Process a float
 
@@ -169,28 +171,6 @@ cross-validated term.  Any combination works, e.g. `["cv", "ref"]`.
 :::
 ::::
 
-## Flag ship noise
-
-With AIS vessel positions (a table, decoded CSV or raw NMEA files):
-
-::::{tab-set}
-:::{tab-item} Flag (default)
-```python
-result = argopal.process_float(7902280, ais="AIS/messages-*.gz")
-result["park"]["ship_flag"]  # a ship within 20 km and ±30 min
-```
-:::
-:::{tab-item} Remove
-```python
-result = argopal.process_float(
-    7902280, ais="AIS/messages-*.gz", ais_action="remove"
-)
-```
-Blanks the flagged measurements; with a reference too, only those whose
-wind also deviates from the reference.
-:::
-::::
-
 ## Figures
 
 ```python
@@ -218,21 +198,3 @@ argopal.export(result, "wmo7902280", format="csv")
 One file per table.
 :::
 ::::
-
-## Find floats with PAL data
-
-```python
-floats = argopal.find_pal_floats()  # every PAL float on the GDAC
-```
-
-## Run the steps one by one
-
-Each step of `process_float` is also a function, e.g.:
-
-```python
-pal, meta = argopal.fetch_pal(7902280)    # PAL spectra and hydrophone
-pal = argopal.clean_pal(pal)              # park drift, QC, despiking
-```
-
-See [How it works](method.md) for the steps and the
-[API reference](api.md) for every function.
