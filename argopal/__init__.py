@@ -173,7 +173,12 @@ from .plot import (
 )
 from .positions import attach_positions, read_positions
 from .read import read_pal, read_pal_meta
-from .reference import collocate_reference, read_reference
+from .reference import (
+    ReferenceHeightWarning,
+    collocate_reference,
+    read_reference,
+    wind_to_10m,
+)
 from .search import find_pal_floats, read_profile_index
 from .wind import (
     COEFFICIENTS,
@@ -197,6 +202,7 @@ __all__ = [
     "BandCoverageWarning",
     "BandLayoutWarning",
     "BandOrderWarning",
+    "ReferenceHeightWarning",
     "__version__",
     "absorption_francois_garrison",
     "attach_park",
@@ -266,6 +272,7 @@ __all__ = [
     "wind_nystuen2015",
     "wind_pensieri2015",
     "wind_skill",
+    "wind_to_10m",
     "wind_uncertainty",
     "wind_vagle1990",
 ]

@@ -24,6 +24,13 @@
   measurements used (also in `plot_all` when there is a reference).
   `collocate_reference` records each reference's position (the most
   frequent one, and how far the others are).
+- Reference winds are converted to 10 m, the height the wind models are
+  calibrated for: `wind_to_10m` (neutral logarithmic profile, or power
+  law), from a `height_m` column or `reference_height_m=` (one value or
+  one per reference).  Without a height, a `ReferenceHeightWarning` says
+  the winds are assumed to be 10 m already.
+- The example buoy winds (`examples/data/reference_winds_2026.csv`) give
+  their anemometer height (3.5 m) and are converted to 10 m.
 - `plot_reference_timeseries`: the reference wind and the float wind
   (published and refitted model) against time, for the points used in the
   refit, one row per reference (also in `plot_all` after a refit).

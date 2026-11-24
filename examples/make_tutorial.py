@@ -235,14 +235,21 @@ a reference), and each refitted wind gets an uncertainty.
 ArgoPAL does not download reference winds: one table holds them all, here
 three Météo-France buoys (DYFAMED, LION, PACA), January–June 2026.  Columns
 `reference_name`, `datetime`, `latitude`, `longitude`, `wind_speed`, and
-optionally `wind_speed_sigma`, the error of each value.
+optionally `wind_speed_sigma`, the error of each value, and `height_m`, the
+height of the wind measurement.
+
+The wind models are calibrated against **10 m wind**, so the reference
+must be 10 m wind too.  These buoys measure wind at about 3.5 m
+(`height_m` = 3.5); ArgoPAL converts it to 10 m when reading the table
+(`argopal.wind_to_10m`, a factor of about 1.10 here).  The float wind,
+from models calibrated against 10 m wind, is then 10 m wind as well.
 """)
 
 code("""
 import pandas as pd
 
 buoys = pd.read_csv("data/reference_winds_2026.csv")
-buoys.groupby("reference_name")[["latitude", "longitude"]].mean().round(2)
+buoys.groupby("reference_name")[["latitude", "longitude", "height_m"]].mean().round(2)
 """)
 
 md("""

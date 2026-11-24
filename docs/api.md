@@ -117,6 +117,7 @@ Collocation with reference winds, refitting of the models, skill and uncertainty
 .. currentmodule:: argopal
 
 .. autofunction:: read_reference
+.. autofunction:: wind_to_10m
 .. autofunction:: collocate_reference
 .. autofunction:: average_to_reference
 .. autofunction:: fit_wind_models
@@ -194,4 +195,5 @@ Write any table, or all of them, to CSV or NetCDF, and read them back.
 .. autoclass:: argopal.BandLayoutWarning
 .. autoclass:: argopal.BandOrderWarning
 .. autoclass:: argopal.BandCoverageWarning
+.. autoclass:: argopal.ReferenceHeightWarning
 ```

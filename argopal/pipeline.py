@@ -47,6 +47,7 @@ def process_float(
     ais_action="flag",
     reference=None,
     reference_max_time="1h",
+    reference_height_m=None,
     fit_reference=None,
     fit_max_distance_km=40.0,
     reference_average=True,
@@ -158,6 +159,11 @@ def process_float(
         ArgoPAL does not download reference winds.
     reference_max_time : str, optional
         Largest time difference for collocation, by default "1h".
+    reference_height_m : float or dict, optional
+        Height (m) of the reference winds, if the table has no height_m
+        column: one value, or reference_name -> height.  The winds are
+        converted to 10 m, the height of the wind models; without a
+        height they are assumed to be 10 m already (with a warning).
     fit_reference : str, optional
         Reference used to refit the models; by default the first one.
     fit_max_distance_km : float, optional
@@ -280,6 +286,7 @@ def process_float(
             if isinstance(source, dict):
                 opts = {k: v for k, v in source.items() if k != "source"}
                 source = source["source"]
+            opts.setdefault("height_m", reference_height_m)
             pal = collocate_reference(
                 pal, source, name=name, max_time=reference_max_time, **opts
             )

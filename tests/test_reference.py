@@ -722,3 +722,53 @@ def test_reference_map_greys_out_buoys_passed_without_float_wind():
     assert "Reference not used (no float wind)" in labels
     colours = {t.get_text(): t.get_color() for t in ax.texts}
     assert colours["B"] != colours["A"]  # B greyed out
+
+
+# --- Reference wind at 10 m --------------------------------------------------------
+
+
+def test_wind_to_10m():
+    assert argopal.wind_to_10m(7.0, 10.0) == pytest.approx(7.0)
+    assert argopal.wind_to_10m(7.0, 10.0, method="power") == pytest.approx(7)
+    low = argopal.wind_to_10m(5.0, 4.0)
+    assert 5.0 < low < 6.0  # stronger at 10 m than at 4 m
+    # log profile: U10 / U(z) = ln(10 / z0) / ln(z / z0)
+    z0 = 1.52e-4
+    assert low == pytest.approx(5.0 * np.log(10 / z0) / np.log(4 / z0))
+    assert argopal.wind_to_10m(5.0, 4.0, method="power") == pytest.approx(
+        5.0 * (10 / 4) ** 0.11
+    )
+    with pytest.raises(ValueError, match="positive"):
+        argopal.wind_to_10m(5.0, 0)
+    with pytest.raises(ValueError, match="method"):
+        argopal.wind_to_10m(5.0, 4.0, method="cubic")
+
+
+def test_read_reference_converts_to_10m():
+    refs = _several_references()  # A and B, no height
+    with pytest.warns(argopal.ReferenceHeightWarning, match="A, B"):
+        same = argopal.read_reference(refs)
+    assert same.attrs["height"]["height_m"]["A"] == "unknown, assumed 10 m"
+    # one height for all
+    four = argopal.read_reference(refs, height_m=4)
+    a = four[four["reference_name"] == "A"]["wind_speed"].iloc[0]
+    assert a == pytest.approx(argopal.wind_to_10m(5.0, 4.0))
+    # per reference; the one without is warned about
+    with pytest.warns(argopal.ReferenceHeightWarning, match="B"):
+        per = argopal.read_reference(refs, height_m={"A": 4})
+    b = per[per["reference_name"] == "B"]["wind_speed"].iloc[0]
+    assert b == pytest.approx(9.0)  # B unchanged, assumed 10 m
+    # a height column (e.g. 10 for winds already at 10 m)
+    col = argopal.read_reference(refs.assign(sensor_height=10.0))
+    assert col["wind_speed"].tolist() == same["wind_speed"].tolist()
+    assert col.attrs["height"]["height_m"]["B"] == [10.0]
+
+
+def test_collocation_records_the_height():
+    pal = _pal([T0 + pd.Timedelta("10min")])
+    out = argopal.collocate_reference(
+        pal, _several_references(), name="b", height_m=4
+    )
+    assert out["U_b"].iloc[0] == pytest.approx(argopal.wind_to_10m(5.0, 4.0))
+    h = out.attrs["references"]["b"]["height"]
+    assert h["method"] == "log" and h["height_m"]["A"] == [4.0]

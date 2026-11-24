@@ -13,6 +13,9 @@ wind for float 7902280.
 | PACA | BOUEE_PACA | 6101036 | off Provence |
 
 Columns: `reference_name`, `datetime` (UTC), `latitude`, `longitude`,
-`wind_speed`.  The buoys give no error per value, so the file has no
-`wind_speed_sigma` column; the tutorial passes one error for all of them
-instead (`reference_sigma`).
+`wind_speed` (as measured, m s⁻¹) and `height_m`, the anemometer height:
+3.5 m for all three buoys (Météo-France gives 3–4 m).  ArgoPAL converts
+the winds to 10 m when reading them (`argopal.wind_to_10m`, neutral
+logarithmic profile; a factor of about 1.10 at 3.5 m).  The buoys give no
+error per value, so the file has no `wind_speed_sigma` column; the
+tutorial passes one error for all of them instead (`reference_sigma`).

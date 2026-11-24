@@ -41,11 +41,24 @@ result["wind_uncertainty"]  # cross-validated σ by wind-speed bin
 
 Columns are recognised by name: time (`datetime`, `time`, `date`, …), wind
 speed (`wind_speed`, `wind`, `ff`, `u10`, …) and position (`latitude`/`lat`,
-`longitude`/`lon`, or `latitude=`/`longitude=` for one fixed buoy); it
-should be 10 m wind.  Optional: `reference_name` (also `station`,
-`buoy_name`, `platform`), needed when the table holds several references,
-and `wind_speed_sigma` (also `wind_sigma`, `sigma`), the error of each
-value.  Moving references (ships) are fine: positions are read per value.
+`longitude`/`lon`, or `latitude=`/`longitude=` for one fixed buoy).
+Optional: `reference_name` (also `station`, `buoy_name`, `platform`),
+needed when the table holds several references; `wind_speed_sigma` (also
+`wind_sigma`, `sigma`), the error of each value; and `height_m` (also
+`sensor_height`, `anemometer_height`), the height of the wind values.
+Moving references (ships) are fine: positions are read per value.
+
+**Reference winds must be 10 m winds.**  The wind models are calibrated
+against wind at 10 m, so a reference measured lower (e.g. a buoy
+anemometer at 4 m) must be converted first, or the refit would build the
+height difference into the coefficients.  Give the height of the
+`wind_speed` values, as a `height_m` column or as `reference_height_m=`
+(one value, or one per reference: `{"DYFAMED": 4, "LION": 4}`), and
+ArgoPAL converts them to 10 m with a neutral logarithmic profile
+(`argopal.wind_to_10m`; `height_method="power"` for the power law of Hsu
+et al. 1994).  Without a height, the winds are taken as 10 m winds and a
+`ReferenceHeightWarning` names the references concerned.  For winds
+already at 10 m, give `height_m` = 10.
 
 Matching: for each reference, its value nearest in time within
 `reference_max_time` (1 h) is taken; of these, the one from the reference

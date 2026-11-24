@@ -14,6 +14,13 @@ Columns, recognised by name (case-insensitive):
   error (optional): wind_speed_sigma, wind_sigma, sigma  (m s-1)
                    Error of each reference value, used by
                    `wind_uncertainty`.
+  height (optional): height_m, sensor_height, anemometer_height  (m)
+                   Height of the wind_speed values above the sea surface.
+
+The wind models are calibrated against wind at 10 m, so the reference must
+be 10 m wind.  With a height (a column, or `height_m=`), the wind is
+converted to 10 m (`wind_to_10m`); without one, it is assumed to be 10 m
+already, with a `ReferenceHeightWarning`.
 
 Each PAL measurement is matched to the closest reference (in distance)
 among those with a value within `max_time` of it; for each reference, its
@@ -21,8 +28,14 @@ value nearest in time is taken.  The reference should be the wind at 10 m,
 like the models.
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
+
+
+class ReferenceHeightWarning(UserWarning):
+    """The height of a reference wind is unknown: assumed to be 10 m."""
 
 
 TABLE_ALIASES = {
@@ -32,8 +45,48 @@ TABLE_ALIASES = {
     "longitude": ("longitude", "lon", "long"),
     "reference_name": ("reference_name", "station", "buoy_name", "platform"),
     "wind_speed_sigma": ("wind_speed_sigma", "wind_sigma", "sigma"),
+    "height_m": ("height_m", "sensor_height", "anemometer_height"),
 }
-OPTIONAL = ("reference_name", "wind_speed_sigma")
+OPTIONAL = ("reference_name", "wind_speed_sigma", "height_m")
+Z0_OPEN_SEA = 1.52e-4  # m, roughness length of the open sea (neutral)
+POWER_LAW_EXPONENT = 0.11  # Hsu et al. (1994), over the sea
+
+
+def wind_to_10m(wind_speed, height_m, method="log", z0=Z0_OPEN_SEA):
+    """Wind speed at 10 m from wind measured at another height.
+
+    For a neutral atmosphere over the sea:
+
+    - "log" (default): logarithmic profile,
+      U10 = U(z) ln(10 / z0) / ln(z / z0), with roughness length `z0`
+      (1.52e-4 m by default, typical of the open sea);
+    - "power": power law, U10 = U(z) (10 / z) ** 0.11 (Hsu et al. 1994).
+
+    Parameters
+    ----------
+    wind_speed : array_like
+        Wind speed (m s-1) at `height_m`.
+    height_m : float or array_like
+        Height of the measurement above the sea surface (m).
+    method : {"log", "power"}, optional
+        Profile, by default "log".
+    z0 : float, optional
+        Roughness length (m) for "log", by default 1.52e-4.
+
+    Returns
+    -------
+    np.ndarray
+        Wind speed at 10 m (m s-1).
+    """
+    u = np.asarray(wind_speed, dtype=float)
+    z = np.asarray(height_m, dtype=float)
+    if np.any(z <= 0):
+        raise ValueError("height_m must be positive.")
+    if method == "log":
+        return u * np.log(10.0 / z0) / np.log(z / z0)
+    if method == "power":
+        return u * (10.0 / z) ** POWER_LAW_EXPONENT
+    raise ValueError(f'method must be "log" or "power"; got {method!r}.')
 
 
 def _haversine_km(lat1, lon1, lat2, lon2):
@@ -46,8 +99,11 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2 * r * np.arcsin(np.sqrt(a))
 
 
-def read_reference(source, latitude=None, longitude=None):
-    """Read a reference wind table (see module docstring).
+def read_reference(
+    source, latitude=None, longitude=None, height_m=None, height_method="log"
+):
+    """Read a reference wind table (see module docstring), with the wind at
+    10 m.
 
     Parameters
     ----------
@@ -55,13 +111,27 @@ def read_reference(source, latitude=None, longitude=None):
         A table or a CSV file.
     latitude, longitude : float, optional
         Position of a fixed station, if the table has no position columns.
+    height_m : float or dict, optional
+        Height (m) of the wind_speed values, if the table has no height
+        column: one value, or reference_name -> height.  10 for winds
+        already at 10 m.
+    height_method : {"log", "power"}, optional
+        Profile used to convert to 10 m (see `wind_to_10m`), by default
+        "log".
 
     Returns
     -------
     pd.DataFrame
-        Columns datetime (UTC), wind_speed, latitude, longitude, and
-        reference_name / wind_speed_sigma when the table has them; sorted
-        by time, without missing winds.
+        Columns datetime (UTC), wind_speed (at 10 m), latitude, longitude,
+        and reference_name / wind_speed_sigma / height_m when known; sorted
+        by time, without missing winds.  `attrs["height"]` records the
+        height of each reference and how the wind was converted.
+
+    Warns
+    -----
+    ReferenceHeightWarning
+        If the height of some values is unknown: they are assumed to be
+        10 m wind already.
     """
     df = source if isinstance(source, pd.DataFrame) else pd.read_csv(source)
     lower = {c.strip().lower(): c for c in df.columns}
@@ -105,10 +175,66 @@ def read_reference(source, latitude=None, longitude=None):
         )
     if "reference_name" in out:
         out["reference_name"] = out["reference_name"].astype(str).str.strip()
+    out = _to_10m(out, height_m, height_method)
     out = out.dropna(subset=["datetime", "wind_speed"])
     cols = ["datetime", "wind_speed", "latitude", "longitude"]
+    attrs = out.attrs
     out = out[cols + [c for c in OPTIONAL if c in out]]
-    return out.sort_values("datetime").reset_index(drop=True)
+    out = out.sort_values("datetime").reset_index(drop=True)
+    out.attrs = attrs
+    return out
+
+
+def _to_10m(out, height_m, method):
+    """Convert wind_speed to 10 m where the height is known; warn where it
+    is not."""
+    if height_m is not None:
+        if isinstance(height_m, dict):
+            if "reference_name" not in out:
+                raise ValueError(
+                    "height_m as a dict needs a reference_name column."
+                )
+            h = out["reference_name"].map(
+                {str(k): float(v) for k, v in height_m.items()}
+            )
+        else:
+            h = pd.Series(float(height_m), index=out.index)
+        if "height_m" in out:  # a column fills what is not given
+            h = h.fillna(pd.to_numeric(out["height_m"], errors="coerce"))
+        out["height_m"] = h
+    elif "height_m" in out:
+        out["height_m"] = pd.to_numeric(out["height_m"], errors="coerce")
+    known = out["height_m"].notna() if "height_m" in out else None
+    if known is not None and known.any():
+        out.loc[known, "wind_speed"] = wind_to_10m(
+            out.loc[known, "wind_speed"], out.loc[known, "height_m"], method
+        )
+    names = (
+        out["reference_name"] if "reference_name" in out
+        else pd.Series("reference", index=out.index)
+    )  # fmt: skip
+    unknown = sorted(
+        names[~known].unique() if known is not None else names.unique()
+    )
+    if unknown:
+        warnings.warn(
+            "Reference wind height unknown for "
+            + ", ".join(str(u) for u in unknown)
+            + ": assumed to be 10 m.  The wind models are calibrated "
+            "against 10 m wind; give the height of the wind_speed values "
+            "(a height_m column, or height_m=) to convert them.",
+            ReferenceHeightWarning,
+            stacklevel=3,
+        )
+    heights = {}
+    for name in names.unique():
+        h = out.loc[names == name, "height_m"] if known is not None else None
+        h = h.dropna().unique() if h is not None else []
+        heights[str(name)] = (
+            [float(x) for x in h] if len(h) else "unknown, assumed 10 m"
+        )
+    out.attrs["height"] = {"method": method, "height_m": heights}
+    return out
 
 
 def _position_summary(g):
@@ -135,8 +261,10 @@ def collocate_reference(
     max_distance_km=None,
     latitude=None,
     longitude=None,
+    height_m=None,
+    height_method="log",
 ):
-    """Add a reference wind to each PAL measurement.
+    """Add a reference wind (at 10 m) to each PAL measurement.
 
     For each reference in the table (see the module docstring), its value
     nearest in time is taken, if within `max_time`; of these, the one from
@@ -163,11 +291,17 @@ def collocate_reference(
         fitting and validation can choose (`fit_wind_models` uses 40 km).
     latitude, longitude : float, optional
         Position of a fixed station whose table has no position columns.
+    height_m : float or dict, optional
+        Height (m) of the reference winds if the table has no height
+        column (one value, or reference_name -> height); they are
+        converted to 10 m.  See `read_reference`.
+    height_method : {"log", "power"}, optional
+        Profile used for the conversion (`wind_to_10m`), by default "log".
 
     Returns
     -------
     pd.DataFrame
-        A copy of `pal` with "U_<name>" (m s-1), "<name>_distance_km",
+        A copy of `pal` with "U_<name>" (m s-1, at 10 m), "<name>_distance_km",
         "<name>_dt_min" (reference time minus measurement time, minutes),
         "<name>_time", "<name>_latitude", "<name>_longitude" (time and
         position of the reference value used),
@@ -192,7 +326,13 @@ def collocate_reference(
     lon = out["longitude"].to_numpy(float)
     n = len(out)
 
-    ref = read_reference(reference, latitude=latitude, longitude=longitude)
+    ref = read_reference(
+        reference,
+        latitude=latitude,
+        longitude=longitude,
+        height_m=height_m,
+        height_method=height_method,
+    )
     named = "reference_name" in ref
     groups = (
         list(ref.groupby("reference_name", sort=True)) if named
@@ -260,6 +400,7 @@ def collocate_reference(
         "max_time": str(max_time),
         "max_distance_km": max_distance_km,
         "n_matched": int(matched.sum()),
+        "height": ref.attrs.get("height"),
     }
     if named:
         counts = pd.Series(best_name[matched]).value_counts()

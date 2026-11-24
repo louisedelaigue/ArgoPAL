@@ -80,8 +80,8 @@ but function names and options may still change before 1.0.  Changes are
 listed in the [version history](https://argopal.readthedocs.io/en/latest/versions.html).
 
 - **Calibration needs a reference.**  The published wind models were not
-  made for floats and are biased on them (e.g. +1 to +2 m s⁻¹ for Nystuen on
-  7902280).  Refitting needs reference winds (buoys) that the float
+  made for floats and are biased on them (e.g. +1.4 m s⁻¹ for Nystuen on
+  7902280, against three Météo-France buoys at 10 m).  Refitting needs reference winds (buoys) that the float
   passes close to; ArgoPAL does not download them.  With fewer than 10
   cycles near a reference, the coefficient uncertainty is unreliable, and
   a refit is not to be trusted far outside the winds seen near the
